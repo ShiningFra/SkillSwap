@@ -60,8 +60,12 @@ export class ConversationsService {
 
   /** ES6 : seuls les deux membres du fil le lisent ; un autre membre reçoit « introuvable ». */
   private async interlocuteur(moiId: string, conversationId: string) {
-    const { rows } = await this.db.query<{ id: string; pseudo: string }>(
-      `SELECT o.id, o.pseudo FROM conversation c
+    const { rows } = await this.db.query<{
+      id: string;
+      pseudo: string;
+      statut: string;
+    }>(
+      `SELECT o.id, o.pseudo, o.statut FROM conversation c
          JOIN utilisateur o ON o.id = CASE WHEN c.initiateur_id = $1 THEN c.destinataire_id ELSE c.initiateur_id END
         WHERE c.id = $2 AND $1 IN (c.initiateur_id, c.destinataire_id)`,
       [moiId, conversationId],
@@ -92,6 +96,9 @@ export class ConversationsService {
 
   async ecrire(moiId: string, conversationId: string, texte: string) {
     const autre = await this.interlocuteur(moiId, conversationId);
+    // RG14 : on n'écrit plus à un compte supprimé.
+    if (autre.statut === 'SUPPRIME')
+      throw new ErreurMetier('errors.membreSupprime', HttpStatus.GONE);
     await this.db.transaction(async (c) => {
       await c.query(
         'INSERT INTO message (conversation_id, expediteur_id, contenu) VALUES ($1, $2, $3)',

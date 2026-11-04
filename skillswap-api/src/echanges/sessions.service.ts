@@ -118,6 +118,8 @@ export class SessionsService {
       moiId,
       conversationId,
     );
+    if (autre.statut === 'SUPPRIME')
+      throw new ErreurMetier('errors.membreSupprime', HttpStatus.GONE);
     try {
       return await this.db.transaction(async (c) => {
         const k = await c.query<{ debut: Date; fin: Date; format: string }>(

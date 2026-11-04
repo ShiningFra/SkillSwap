@@ -31,6 +31,13 @@ export const inscriptionSchema = z.object({
   cgu: z.literal(true, { error: 'errors.cgu' }),
 });
 
+export const suppressionSchema = z.object({
+  motDePasse: z
+    .string()
+    .min(1, { error: 'errors.invalide' })
+    .max(128, { error: 'errors.invalide' }),
+});
+
 export const connexionSchema = z.object({
   email: z.string().max(254, { error: 'errors.invalide' }),
   motDePasse: z.string().max(128, { error: 'errors.invalide' }),

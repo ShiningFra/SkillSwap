@@ -40,6 +40,9 @@ export class ProfilsService {
               r.note_moyenne AS "noteMoyenne", COALESCE(r.nb_avis, 0)::int AS "nbAvis",
               d.competence_id AS "competenceId", d.niveau, d.format, (d.preuve_url IS NOT NULL) AS "preuveFournie",
               COALESCE(vc.confirmee, false) AS confirmee,
+              ARRAY(SELECT x.competence_id FROM declaration_competence x
+                      JOIN declaration_competence mo ON mo.competence_id = x.competence_id AND mo.utilisateur_id = $1 AND mo.sens = 'OFFERTE'
+                     WHERE x.utilisateur_id = u.id AND x.sens = 'RECHERCHEE') AS reciproques,
               CASE WHEN moi.mode_localisation = 'AUTOMATIQUE' AND u.mode_localisation = 'AUTOMATIQUE'
                    THEN distance_km(moi.latitude::float8, moi.longitude::float8, u.latitude::float8, u.longitude::float8) END AS distance
          FROM declaration_competence d
@@ -55,7 +58,19 @@ export class ProfilsService {
     );
     const parMembre = new Map<string, Record<string, unknown>>();
     for (const r of rows) {
-      if (parMembre.has(r.id as string)) continue; // une ligne par membre : sa première offre correspondante
+      const offre = {
+        competenceId: r.competenceId,
+        niveau: r.niveau,
+        format: r.format,
+        preuveFournie: r.preuveFournie,
+        confirmee: r.confirmee,
+      };
+      const deja = parMembre.get(r.id as string);
+      if (deja) {
+        // Toutes les offres qui correspondent aux critères, pas seulement la première.
+        (deja.offres as unknown[]).push(offre);
+        continue;
+      }
       parMembre.set(r.id as string, {
         id: r.id,
         pseudo: r.pseudo,
@@ -65,13 +80,9 @@ export class ProfilsService {
         telephoneVerifie: r.telephoneVerifie,
         noteMoyenne: r.noteMoyenne === null ? undefined : Number(r.noteMoyenne),
         nbAvis: r.nbAvis,
-        offre: {
-          competenceId: r.competenceId,
-          niveau: r.niveau,
-          format: r.format,
-          preuveFournie: r.preuveFournie,
-          confirmee: r.confirmee,
-        },
+        offres: [offre],
+        // Compétences que ce membre cherche et que je propose : base de la phrase de réciprocité.
+        reciproques: r.reciproques,
       });
     }
     return [...parMembre.values()].sort(

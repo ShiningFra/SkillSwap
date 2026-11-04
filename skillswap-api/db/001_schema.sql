@@ -30,7 +30,7 @@ CREATE TABLE utilisateur (
     cree_le               timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT ck_utilisateur_mode   CHECK (mode_localisation IN ('AUCUNE','MANUELLE','AUTOMATIQUE')),
     CONSTRAINT ck_utilisateur_role   CHECK (role IN ('MEMBRE','ADMIN')),
-    CONSTRAINT ck_utilisateur_statut CHECK (statut IN ('ACTIF','SUSPENDU')),
+    CONSTRAINT ck_utilisateur_statut CHECK (statut IN ('ACTIF','SUSPENDU','SUPPRIME')),
     CONSTRAINT ck_utilisateur_lat    CHECK (latitude  BETWEEN -90  AND 90),
     CONSTRAINT ck_utilisateur_lon    CHECK (longitude BETWEEN -180 AND 180),
     -- RG17 : numéro au format international sans séparateur ; une vérification suppose un numéro
@@ -221,10 +221,12 @@ CREATE TABLE signalement (
     description    text,
     statut         varchar(10) NOT NULL DEFAULT 'OUVERT',
     decision       text,
+    -- RG22 : gravité déduite du motif, pour trier la file de modération (jamais saisie)
+    gravite        varchar(7)  GENERATED ALWAYS AS (CASE motif WHEN 'COMPORTEMENT_INAPPROPRIE' THEN 'HAUTE' WHEN 'FAUX_PROFIL' THEN 'MOYENNE' ELSE 'BASSE' END) STORED,
     cree_le        timestamptz NOT NULL DEFAULT now(),
     traite_le      timestamptz,
     CONSTRAINT ck_signalement_distincts CHECK (auteur_id <> cible_id),           -- RG13
-    CONSTRAINT ck_signalement_motif  CHECK (motif IN ('FAUX_PROFIL','COMPORTEMENT_INAPPROPRIE','ABSENCE_SANS_PREVENIR','SPAM','AUTRE')),
+    CONSTRAINT ck_signalement_motif  CHECK (motif IN ('FAUX_PROFIL','COMPORTEMENT_INAPPROPRIE','SPAM','AUTRE')),
     CONSTRAINT ck_signalement_statut CHECK (statut IN ('OUVERT','EN_COURS','TRAITE','REJETE')),
     CONSTRAINT ck_signalement_moderation CHECK (statut = 'OUVERT' OR moderateur_id IS NOT NULL),
     CONSTRAINT ck_signalement_cloture CHECK (statut NOT IN ('TRAITE','REJETE') OR traite_le IS NOT NULL)

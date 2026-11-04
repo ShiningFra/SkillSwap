@@ -18,8 +18,13 @@ import {
   Utilisateur,
 } from '../common/session.guard';
 import type { UtilisateurCourant } from '../common/session.guard';
-import { connexionSchema, inscriptionSchema } from '../shared/schemas';
+import {
+  connexionSchema,
+  inscriptionSchema,
+  suppressionSchema,
+} from '../shared/schemas';
 import { AuthService } from './auth.service';
+import { SuppressionService } from './suppression.service';
 
 /** ES4 : HttpOnly, Secure (hors développement), SameSite=Lax, durée limitée. */
 function poserCookie(res: Response, jeton: string) {
@@ -35,7 +40,10 @@ function poserCookie(res: Response, jeton: string) {
 
 @Controller()
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly suppression: SuppressionService,
+  ) {}
 
   // ES13 : au plus 10 inscriptions par minute et par IP.
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -77,6 +85,21 @@ export class AuthController {
   ) {
     const jeton: unknown = req.cookies?.[COOKIE_SESSION];
     if (typeof jeton === 'string') await this.auth.deconnecter(jeton);
+    res.clearCookie(COOKIE_SESSION, { path: '/' });
+  }
+
+  // RG14 : suppression du compte après confirmation par le mot de passe (5 essais par minute au plus).
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @UseGuards(SessionGuard)
+  @HttpCode(204)
+  @Post('moi/suppression')
+  async supprimer(
+    @Utilisateur() u: UtilisateurCourant,
+    @Body() corps: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const v = valider(suppressionSchema, corps);
+    await this.suppression.supprimer(u.id, v.motDePasse);
     res.clearCookie(COOKIE_SESSION, { path: '/' });
   }
 

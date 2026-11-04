@@ -134,7 +134,6 @@ export interface ResumeConversation {
 export const MOTIFS_SIGNALEMENT = [
   'FAUX_PROFIL',
   'COMPORTEMENT_INAPPROPRIE',
-  'ABSENCE_SANS_PREVENIR',
   'SPAM',
   'AUTRE',
 ] as const;

@@ -42,15 +42,16 @@ export class AdminService {
     };
   }
 
-  /** File de modération : les signalements ouverts d'abord, les plus anciens en tête. */
+  /** File de modération (RG22) : gravité d'abord, puis nombre de signaleurs distincts, puis ancienneté. */
   async lister() {
     const { rows } = await this.db.query(
-      `SELECT s.id, s.motif, s.statut, s.cree_le AS "creeLe",
+      `SELECT s.id, s.motif, s.gravite, s.statut, s.cree_le AS "creeLe",
               c.pseudo AS "ciblePseudo",
               (SELECT count(DISTINCT x.auteur_id)::int FROM signalement x WHERE x.cible_id = s.cible_id) AS "nbSignaleurs"
          FROM signalement s JOIN utilisateur c ON c.id = s.cible_id
         WHERE s.statut IN ('OUVERT','EN_COURS')
-        ORDER BY s.cree_le
+        ORDER BY CASE s.gravite WHEN 'HAUTE' THEN 0 WHEN 'MOYENNE' THEN 1 ELSE 2 END,
+                 "nbSignaleurs" DESC, s.cree_le
         LIMIT 100`,
     );
     return rows;

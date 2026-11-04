@@ -129,6 +129,37 @@ describe('Administration : indicateurs et modération', () => {
     expect(audit.rowCount).toBe(1);
   });
 
+  it('trie la file par gravité puis par nombre de signaleurs distincts', async () => {
+    const a = await membre('ADMIN');
+    const faible = await membre();
+    const grave = await membre();
+    const sf = await signalement(faible, await membre());
+    const sg = (
+      await pool.query<{ id: string }>(
+        `INSERT INTO signalement (auteur_id, cible_id, motif) VALUES ($1, $2, 'COMPORTEMENT_INAPPROPRIE') RETURNING id`,
+        [(await membre()).id, grave.id],
+      )
+    ).rows[0].id;
+    const liste = (await a.agent.get('/admin/signalements')).body as {
+      id: string;
+      gravite: string;
+    }[];
+    expect(liste.find((l) => l.id === sg)?.gravite).toBe('HAUTE');
+    expect(liste.findIndex((l) => l.id === sg)).toBeLessThan(
+      liste.findIndex((l) => l.id === sf),
+    );
+  });
+
+  it('refuse le motif retiré « absence sans prévenir »', async () => {
+    const m = await membre();
+    const c = await membre();
+    const r = await m.agent
+      .post('/signalements')
+      .set('Origin', ORIGINE)
+      .send({ membreId: c.id, motif: 'ABSENCE_SANS_PREVENIR' });
+    expect(r.status).toBe(400);
+  });
+
   it('suspend le compte et révoque ses sessions', async () => {
     const a = await membre('ADMIN');
     const cible = await membre();
