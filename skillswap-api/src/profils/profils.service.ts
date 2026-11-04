@@ -10,11 +10,21 @@ const FORMAT_DATE = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'short',
   day: 'numeric',
   month: 'short',
-  hour: '2-digit',
+  hour: 'numeric',
   minute: '2-digit',
+  hourCycle: 'h23',
   timeZone: 'Africa/Douala',
 });
-export const libelleDate = (d: Date) => FORMAT_DATE.format(d);
+
+/** « Sam. 7 nov., 10 h » ou « Sam. 7 nov., 10 h 30 », dans le fuseau du Cameroun. */
+export function libelleDate(d: Date): string {
+  const p = Object.fromEntries(
+    FORMAT_DATE.formatToParts(d).map((x) => [x.type, x.value]),
+  );
+  const jour = p.weekday.charAt(0).toUpperCase() + p.weekday.slice(1);
+  const heure = p.minute === '00' ? `${p.hour} h` : `${p.hour} h ${p.minute}`;
+  return `${jour} ${p.day} ${p.month}, ${heure}`;
+}
 
 @Injectable()
 export class ProfilsService {

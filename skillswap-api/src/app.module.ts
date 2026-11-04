@@ -1,3 +1,4 @@
+import { AdminModule } from './admin/admin.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -6,6 +7,7 @@ import { config } from './config';
 import { DbModule } from './db/db.module';
 import { EchangesModule } from './echanges/echanges.module';
 import { MembreModule } from './membre/membre.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { ProfilsModule } from './profils/profils.module';
 import { TelephoneModule } from './telephone/telephone.module';
 
@@ -25,6 +27,8 @@ import { TelephoneModule } from './telephone/telephone.module';
     MembreModule,
     ProfilsModule,
     EchangesModule,
+    NotificationsModule,
+    AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

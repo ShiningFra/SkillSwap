@@ -17,7 +17,12 @@ export default async function () {
   await a.end();
   const c = new Client({ connectionString: cible });
   await c.connect();
-  for (const f of ['001_schema.sql', '002_seed.sql', '003_securite.sql'])
+  for (const f of [
+    '001_schema.sql',
+    '002_seed.sql',
+    '003_securite.sql',
+    '005_moderation.sql',
+  ])
     await c.query(readFileSync(join(__dirname, '..', 'db', f), 'utf8'));
   await c.query(
     `INSERT INTO competence (libelle, categorie_id) SELECT 'Python', id FROM categorie ORDER BY id LIMIT 1`,

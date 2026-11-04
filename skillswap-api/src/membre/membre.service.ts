@@ -46,7 +46,8 @@ export class MembreService {
 
   async catalogue() {
     const { rows } = await this.db.query(
-      'SELECT id, libelle, categorie_id AS "categorieId" FROM competence ORDER BY libelle',
+      `SELECT c.id, c.libelle, c.categorie_id AS "categorieId", k.libelle AS categorie
+         FROM competence c JOIN categorie k ON k.id = c.categorie_id ORDER BY c.libelle`,
     );
     return rows;
   }

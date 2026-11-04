@@ -6,7 +6,7 @@ Premier lot du backend : socle de sécurité (CDC 7.6, ES1 à ES13), comptes, t�
 
 ```bash
 createdb skillswap
-psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql
+psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql
 cp .env.example .env            # puis adapter
 npm run start:dev                # http://localhost:3001
 ```
@@ -71,3 +71,13 @@ ES12 audit des dépendances en CI.
 3. `npm install`, puis `npm run start:dev`.
 
 Si les accents apparaissent abîmés (« FranÃ§ais ») dans `/competences`, la base a été remplie avec un mauvais encodage : relance `.\scripts\init-db.ps1 -MotDePasse "..." -Exemples -Reinitialiser` (version corrigée du script).
+
+## Administration (v0.4)
+
+Routes réservées au rôle `ADMIN` (403 sinon) : `GET /admin/indicateurs`, `GET /admin/signalements`, `GET /admin/signalements/:id`, `POST /admin/signalements/:id/decision` (`AVERTIR`, `SUSPENDRE`, `REJETER`, commentaire facultatif). Chaque décision est tracée dans `journal_audit`.
+
+Pour une base existante, applique `db/005_moderation.sql` (nouveau type de notification `AVERTISSEMENT`). Pour te donner le rôle :
+
+```sql
+UPDATE utilisateur SET role = 'ADMIN' WHERE email = 'ton@email';
+```

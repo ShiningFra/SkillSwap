@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configurerApp } from '../src/app.setup';
+import { libelleDate } from '../src/profils/profils.service';
 import { SmsPort } from '../src/shared/sms';
 
 const ORIGINE = 'http://localhost:3000';
@@ -111,6 +112,15 @@ describe('Échanges : profils, conversations, sessions, avis, signalements', () 
       `UPDATE session_echange SET date_heure = now() - interval '1 hour' WHERE id = $1`,
       [id],
     );
+
+  it('formate les dates comme la maquette, dans le fuseau du Cameroun', () => {
+    expect(libelleDate(new Date('2026-11-07T09:00:00Z'))).toBe(
+      'Sam. 7 nov., 10 h',
+    );
+    expect(libelleDate(new Date('2026-11-10T17:30:00Z'))).toBe(
+      'Mar. 10 nov., 18 h 30',
+    );
+  });
 
   describe('conversations', () => {
     it('est unique par couple de membres (RG2) et réutilisée', async () => {
@@ -449,6 +459,30 @@ describe('Échanges : profils, conversations, sessions, avis, signalements', () 
         (await post(a, '/signalements', { membreId: cible.id, motif: 'AUTRE' }))
           .status,
       ).toBe(429);
+    });
+  });
+  describe('notifications', () => {
+    it('liste les notifications du membre, les marque lues, et reste privé', async () => {
+      const a = await membre();
+      const b = await membre();
+      const c = (await post(a, '/conversations', { membreId: b.id })).body.id;
+      await post(a, `/conversations/${c}/messages`, { texte: 'Salut' });
+      const avant = await get(b, '/notifications');
+      expect(avant.status).toBe(200);
+      expect(avant.body.nonLues).toBe(1);
+      expect(avant.body.notifications[0]).toEqual(
+        expect.objectContaining({ type: 'NOUVEAU_MESSAGE', lue: false }),
+      );
+      expect((await get(a, '/notifications')).body.notifications).toEqual([]);
+      expect((await post(a, '/notifications/lues')).status).toBe(204);
+      expect((await get(b, '/notifications')).body.nonLues).toBe(1); // celles d'un autre ne sont pas touchées
+      expect((await post(b, '/notifications/lues')).status).toBe(204);
+      const apres = await get(b, '/notifications');
+      expect(apres.body.nonLues).toBe(0);
+      expect(apres.body.notifications[0].lue).toBe(true);
+      expect(
+        (await request(app.getHttpServer()).get('/notifications')).status,
+      ).toBe(401);
     });
   });
 });
