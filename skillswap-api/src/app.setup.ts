@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { config } from './config';
+import { COOKIE_SESSION } from './common/session.guard';
 
 /**
  * ES4 (CSRF) : une requête qui modifie des données doit venir de l'origine du site et porter du JSON.
@@ -20,6 +21,12 @@ export function protectionCsrf(
   if (origine !== undefined && origine !== config().allowedOrigin) {
     return res.status(403).json({ cle: 'errors.origine' });
   }
+  // Un navigateur envoie toujours Origin sur un POST, PUT ou DELETE : son absence avec un cookie de session est refusée.
+  if (
+    origine === undefined &&
+    req.headers.cookie?.includes(`${COOKIE_SESSION}=`)
+  )
+    return res.status(403).json({ cle: 'errors.origine' });
   const aUnCorps =
     Number(req.headers['content-length'] ?? 0) > 0 ||
     req.headers['transfer-encoding'] !== undefined;

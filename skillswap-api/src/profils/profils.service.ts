@@ -170,11 +170,36 @@ export class ProfilsService {
     }
   }
 
+  /** Créneaux à venir du membre, avec un libellé prêt à afficher (fuseau du Cameroun). */
   async mesCreneaux(moiId: string) {
-    const { rows } = await this.db.query(
-      `SELECT id, debut, fin, format, prix_indicatif AS "prixIndicatif", statut FROM creneau WHERE utilisateur_id = $1 AND statut <> 'ANNULE' ORDER BY debut`,
+    const { rows } = await this.db.query<{
+      id: string;
+      debut: Date;
+      fin: Date;
+      format: string;
+      prixIndicatif: number | null;
+      statut: string;
+    }>(
+      `SELECT id, debut, fin, format, prix_indicatif AS "prixIndicatif", statut FROM creneau
+        WHERE utilisateur_id = $1 AND statut <> 'ANNULE' AND fin > now() ORDER BY debut`,
       [moiId],
     );
-    return rows;
+    return rows.map((c) => ({ ...c, libelle: libelleDate(c.debut) }));
+  }
+
+  /** Un créneau libre s'annule ; un créneau réservé par une session doit d'abord être traité par la session. */
+  async annulerCreneau(moiId: string, id: string) {
+    const r = await this.db.query<{ statut: string }>(
+      `UPDATE creneau SET statut = 'ANNULE' WHERE id = $1 AND utilisateur_id = $2 AND statut = 'LIBRE' RETURNING statut`,
+      [id, moiId],
+    );
+    if (r.rowCount === 1) return;
+    const existe = await this.db.query(
+      `SELECT 1 FROM creneau WHERE id = $1 AND utilisateur_id = $2 AND statut = 'RESERVE'`,
+      [id, moiId],
+    );
+    if (existe.rowCount === 1)
+      throw new ErreurMetier('errors.creneauReserve', HttpStatus.CONFLICT);
+    throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
   }
 }

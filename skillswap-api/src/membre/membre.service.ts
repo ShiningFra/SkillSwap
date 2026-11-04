@@ -3,7 +3,12 @@ import { z } from 'zod';
 import { Audit } from '../common/audit.service';
 import { ErreurMetier } from '../common/erreurs';
 import { Db } from '../db/db.service';
-import { declarationSchema, localisationSchema } from '../shared/schemas';
+import {
+  declarationSchema,
+  localisationSchema,
+  modificationCompetenceSchema,
+  profilSchema,
+} from '../shared/schemas';
 
 @Injectable()
 export class MembreService {
@@ -94,5 +99,50 @@ export class MembreService {
     );
     if (r.rowCount === 0)
       throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+  }
+
+  /** Modifie le niveau, le format ou le lien de preuve d'une déclaration existante (RG18 : preuve seulement sur une offre). */
+  async modifierCompetence(
+    id: string,
+    competenceId: string,
+    v: z.infer<typeof modificationCompetenceSchema>,
+  ) {
+    const actuelle = await this.db.query<{ sens: string }>(
+      'SELECT sens FROM declaration_competence WHERE utilisateur_id = $1 AND competence_id = $2',
+      [id, competenceId],
+    );
+    if (!actuelle.rows[0])
+      throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+    if (v.preuveUrl && actuelle.rows[0].sens !== 'OFFERTE')
+      throw new ErreurMetier(
+        'errors.preuveSeulementOfferte',
+        HttpStatus.BAD_REQUEST,
+      );
+    await this.db.query(
+      `UPDATE declaration_competence SET niveau = $3, format = $4, description = $5, preuve_url = $6
+        WHERE utilisateur_id = $1 AND competence_id = $2`,
+      [
+        id,
+        competenceId,
+        v.niveau,
+        v.format,
+        v.description || null,
+        v.preuveUrl || null,
+      ],
+    );
+  }
+
+  /** Pseudo et bio toujours ; la ville seulement en localisation manuelle (RG5 : pas de ville en mode automatique). */
+  async modifierProfil(id: string, v: z.infer<typeof profilSchema>) {
+    const { rows } = await this.db.query<{ mode: string }>(
+      `SELECT mode_localisation AS mode FROM utilisateur WHERE id = $1`,
+      [id],
+    );
+    const manuel = rows[0]?.mode === 'MANUELLE';
+    await this.db.query(
+      `UPDATE utilisateur SET pseudo = $2, bio = $3, ville = CASE WHEN $5 THEN $4 ELSE ville END WHERE id = $1`,
+      [id, v.pseudo, v.bio || null, v.ville || null, manuel],
+    );
+    await this.audit.enregistrer(id, 'PROFIL_MODIFIE');
   }
 }

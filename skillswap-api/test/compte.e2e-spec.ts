@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { createHmac } from 'node:crypto';
 import { Pool } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -202,5 +203,182 @@ describe('Recherche complète, choix de compétence, suppression de compte', () 
     expect(
       (await post(a, '/moi/suppression', { motDePasse: MDP })).status,
     ).toBe(403);
+  });
+
+  it('modifie le profil, une compétence et gère ses créneaux', async () => {
+    const m = await membre();
+    await pool.query(
+      `UPDATE utilisateur SET mode_localisation = 'MANUELLE', ville = 'Douala' WHERE id = $1`,
+      [m.id],
+    );
+    const put = (url: string, corps: object) =>
+      m.agent.put(url).set('Origin', ORIGINE).send(corps);
+    expect((await put('/moi/profil', { pseudo: 'X' })).status).toBe(400);
+    expect(
+      (
+        await put('/moi/profil', {
+          pseudo: 'Nouveau nom',
+          bio: 'Prof',
+          ville: 'Yaoundé',
+        })
+      ).status,
+    ).toBe(204);
+    const moi = (await m.agent.get('/moi')).body;
+    expect(moi.pseudo).toBe('Nouveau nom');
+    expect(moi.bio).toBe('Prof');
+    expect(moi.ville).toBe('Yaoundé');
+
+    await offrir(m, competences[0]);
+    expect(
+      (
+        await put(`/moi/competences/${competences[0]}`, {
+          niveau: 'DEBUTANT',
+          format: 'DISTANCE',
+          preuveUrl: 'https://exemple.cm/x',
+        })
+      ).status,
+    ).toBe(204);
+    const decl = (await m.agent.get('/moi/competences')).body.find(
+      (d: { competenceId: string }) => d.competenceId === competences[0],
+    );
+    expect(decl).toMatchObject({
+      niveau: 'DEBUTANT',
+      format: 'DISTANCE',
+      preuveUrl: 'https://exemple.cm/x',
+    });
+    // une compétence recherchée ne porte pas de preuve (RG18) ; une inconnue est introuvable
+    await chercher(m, competences[1]);
+    expect(
+      (
+        await put(`/moi/competences/${competences[1]}`, {
+          niveau: 'DEBUTANT',
+          format: 'LES_DEUX',
+          preuveUrl: 'https://exemple.cm/x',
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await put('/moi/competences/00000000-0000-4000-8000-000000000000', {
+          niveau: 'DEBUTANT',
+          format: 'LES_DEUX',
+        })
+      ).status,
+    ).toBe(404);
+
+    const libre = await creneau(m, 30);
+    const reserve = await creneau(m, 32);
+    await pool.query(`UPDATE creneau SET statut = 'RESERVE' WHERE id = $1`, [
+      reserve,
+    ]);
+    const liste = (await m.agent.get('/moi/creneaux')).body;
+    expect(liste).toHaveLength(2);
+    expect(liste[0].libelle).toMatch(/\d+ h/);
+    const del = (id: string) =>
+      m.agent.delete(`/moi/creneaux/${id}`).set('Origin', ORIGINE);
+    expect((await del(reserve)).status).toBe(409);
+    expect((await del(libre)).status).toBe(204);
+    expect((await del(libre)).status).toBe(404);
+    expect((await m.agent.get('/moi/creneaux')).body).toHaveLength(1);
+  });
+
+  it('refuse une requête qui modifie sans en-tête Origin quand un cookie de session est présent (ES4)', async () => {
+    const m = await membre();
+    await m.agent
+      .put('/moi/profil')
+      .send({ pseudo: 'Sans origine' })
+      .expect(403);
+    await m.agent
+      .put('/moi/profil')
+      .set('Origin', 'http://evil.example')
+      .send({ pseudo: 'Origine etrangere' })
+      .expect(403);
+  });
+
+  it('change le mot de passe et révoque les autres sessions', async () => {
+    const m = await membre();
+    const autre = request.agent(app.getHttpServer());
+    expect(
+      (
+        await autre
+          .post('/auth/connexion')
+          .set('Origin', ORIGINE)
+          .send({ email: m.email, motDePasse: MDP })
+      ).status,
+    ).toBe(200);
+    const change = (corps: object) => post(m, '/moi/mot-de-passe', corps);
+    expect(
+      (await change({ actuel: 'faux', nouveau: 'un-autre-mot-de-passe' }))
+        .status,
+    ).toBe(401);
+    expect((await change({ actuel: MDP, nouveau: 'court' })).status).toBe(400);
+    expect(
+      (await change({ actuel: MDP, nouveau: 'un-autre-mot-de-passe' })).status,
+    ).toBe(204);
+    expect((await m.agent.get('/moi')).status).toBe(200);
+    expect((await autre.get('/moi')).status).toBe(401);
+    const ancien = await request(app.getHttpServer())
+      .post('/auth/connexion')
+      .set('Origin', ORIGINE)
+      .send({ email: m.email, motDePasse: MDP });
+    expect(ancien.status).toBe(401);
+    const neuf = await request(app.getHttpServer())
+      .post('/auth/connexion')
+      .set('Origin', ORIGINE)
+      .send({ email: m.email, motDePasse: 'un-autre-mot-de-passe' });
+    expect(neuf.status).toBe(200);
+  });
+
+  it('change de numéro : masqué, ancien conservé jusqu’à la vérification', async () => {
+    const m = await membre();
+    const avant = (await m.agent.get('/moi')).body;
+    expect(avant.telephoneVerifie).toBe(true);
+    expect(avant.telephoneMasque).toMatch(/^\+237 \d •• •• \d\d \d\d$/);
+    expect(JSON.stringify(avant)).not.toMatch(/"telephone":/);
+    const actuel = (
+      await pool.query(`SELECT telephone FROM utilisateur WHERE id = $1`, [
+        m.id,
+      ])
+    ).rows[0].telephone as string;
+    expect(
+      (await post(m, '/telephone/code', { telephone: actuel })).status,
+    ).toBe(409);
+    const neuf = `+23769${String(Date.now()).slice(-7)}`;
+    expect((await post(m, '/telephone/code', { telephone: neuf })).status).toBe(
+      202,
+    );
+    // tant que le code n'est pas validé, l'ancien numéro reste vérifié
+    const encore = await pool.query(
+      `SELECT telephone, telephone_verifie_le FROM utilisateur WHERE id = $1`,
+      [m.id],
+    );
+    expect(encore.rows[0].telephone).toBe(actuel);
+    expect(encore.rows[0].telephone_verifie_le).not.toBeNull();
+    // le code n'est pas lisible ici (SMS simulé) : on le remplace par un code connu
+    const v = await pool.query<{ id: string }>(
+      `SELECT id FROM verification_telephone WHERE utilisateur_id = $1 AND telephone = $2`,
+      [m.id, neuf],
+    );
+    const hash = createHmac(
+      'sha256',
+      process.env.SMS_PEPPER ?? 'dev-pepper-non-secret',
+    )
+      .update(`${v.rows[0].id}:123456`)
+      .digest('hex');
+    await pool.query(
+      `UPDATE verification_telephone SET code_hash = $2 WHERE id = $1`,
+      [v.rows[0].id, hash],
+    );
+    expect(
+      (await post(m, '/telephone/verifier', { code: '654321' })).status,
+    ).toBe(400);
+    expect(
+      (await post(m, '/telephone/verifier', { code: '123456' })).status,
+    ).toBe(200);
+    const apres = await pool.query(
+      `SELECT telephone FROM utilisateur WHERE id = $1`,
+      [m.id],
+    );
+    expect(apres.rows[0].telephone).toBe(neuf);
   });
 });

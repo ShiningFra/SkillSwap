@@ -14,6 +14,14 @@ const MAX_ECHECS_COMPTE = 5;
 const MAX_ECHECS_IP = 20;
 const FENETRE_MINUTES = 15;
 
+/** « +237 6 •• •• 42 17 » (ES8 : jamais le numéro complet). */
+export function masquerTelephone(tel: string): string {
+  const m = /^(\+\d{3})(\d)\d*(\d{4})$/.exec(tel);
+  return m
+    ? `${m[1]} ${m[2]} •• •• ${m[3].slice(0, 2)} ${m[3].slice(2)}`
+    : '••••';
+}
+
 @Injectable()
 export class AuthService {
   private fauxHash?: Promise<string>;
@@ -117,10 +125,55 @@ export class AuthService {
 
   /** Ne renvoie jamais de téléphone, d'e-mail ni de coordonnées (ES8, ES9). */
   async moi(id: string) {
-    const { rows } = await this.db.query(
-      `SELECT id, pseudo, role, mode_localisation AS "modeLocalisation", ville, (telephone_verifie_le IS NOT NULL) AS "telephoneVerifie" FROM utilisateur WHERE id = $1`,
+    const { rows } = await this.db.query<{
+      telephone: string | null;
+      telephoneVerifie: boolean;
+    }>(
+      `SELECT id, pseudo, bio, role, mode_localisation AS "modeLocalisation", ville, telephone, (telephone_verifie_le IS NOT NULL) AS "telephoneVerifie" FROM utilisateur WHERE id = $1`,
       [id],
     );
-    return rows[0];
+    const { telephone, ...reste } = rows[0];
+    // Le numéro n'est jamais renvoyé en entier : seulement une forme masquée, pour que le membre reconnaisse le sien.
+    return {
+      ...reste,
+      telephoneMasque:
+        telephone && reste.telephoneVerifie
+          ? masquerTelephone(telephone)
+          : null,
+    };
+  }
+
+  /**
+   * Changement de mot de passe : demande l'ancien (ES2), puis révoque toutes les autres sessions du compte
+   * (un jeton volé ne survit pas au changement) et garde celle de l'appareil courant.
+   */
+  async changerMotDePasse(
+    id: string,
+    jetonCourant: string | undefined,
+    actuel: string,
+    nouveau: string,
+  ) {
+    const { rows } = await this.db.query<{ hash: string }>(
+      `SELECT mot_de_passe_hash AS hash FROM utilisateur WHERE id = $1 AND statut = 'ACTIF'`,
+      [id],
+    );
+    if (!rows[0])
+      throw new ErreurMetier('errors.nonConnecte', HttpStatus.UNAUTHORIZED);
+    const valide = await verify(rows[0].hash, actuel).catch(() => false);
+    if (!valide)
+      throw new ErreurMetier('errors.identifiants', HttpStatus.UNAUTHORIZED);
+    const nouveauHash = await hash(nouveau, PARAMS);
+    await this.db.transaction(async (c) => {
+      await c.query(
+        'UPDATE utilisateur SET mot_de_passe_hash = $2 WHERE id = $1',
+        [id, nouveauHash],
+      );
+      await c.query(
+        `UPDATE session_connexion SET revoque_le = now()
+          WHERE utilisateur_id = $1 AND revoque_le IS NULL AND jeton_hash <> $2`,
+        [id, jetonCourant ? empreinte(jetonCourant) : ''],
+      );
+    });
+    await this.audit.enregistrer(id, 'MOT_DE_PASSE_MODIFIE');
   }
 }

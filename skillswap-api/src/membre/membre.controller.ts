@@ -13,7 +13,12 @@ import { z } from 'zod';
 import { ErreurMetier, valider } from '../common/erreurs';
 import { SessionGuard, Utilisateur } from '../common/session.guard';
 import type { UtilisateurCourant } from '../common/session.guard';
-import { declarationSchema, localisationSchema } from '../shared/schemas';
+import {
+  declarationSchema,
+  localisationSchema,
+  modificationCompetenceSchema,
+  profilSchema,
+} from '../shared/schemas';
 import { MembreService } from './membre.service';
 
 @Controller()
@@ -61,5 +66,29 @@ export class MembreController {
     if (!z.uuid().safeParse(competenceId).success)
       throw new ErreurMetier('errors.introuvable', 404);
     await this.membre.retirer(u.id, competenceId);
+  }
+
+  @UseGuards(SessionGuard)
+  @HttpCode(204)
+  @Put('moi/competences/:competenceId')
+  async modifier(
+    @Utilisateur() u: UtilisateurCourant,
+    @Param('competenceId') competenceId: string,
+    @Body() corps: unknown,
+  ) {
+    if (!z.uuid().safeParse(competenceId).success)
+      throw new ErreurMetier('errors.introuvable', 404);
+    await this.membre.modifierCompetence(
+      u.id,
+      competenceId,
+      valider(modificationCompetenceSchema, corps),
+    );
+  }
+
+  @UseGuards(SessionGuard)
+  @HttpCode(204)
+  @Put('moi/profil')
+  async profil(@Utilisateur() u: UtilisateurCourant, @Body() corps: unknown) {
+    await this.membre.modifierProfil(u.id, valider(profilSchema, corps));
   }
 }

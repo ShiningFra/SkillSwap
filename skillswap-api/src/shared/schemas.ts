@@ -22,13 +22,41 @@ export const inscriptionSchema = z.object({
     .string()
     .trim()
     .min(2, { error: 'errors.pseudo' })
-    .max(40, { error: 'errors.pseudo' }),
+    .max(40, { error: 'errors.pseudo' })
+    .regex(/^[\p{L}\p{N}][\p{L}\p{N} ._'’-]*$/u, { error: 'errors.pseudo' }),
   motDePasse: z
     .string()
     .min(10, { error: 'errors.motDePasse' })
     .max(128, { error: 'errors.motDePasse' }),
   majeur: z.literal(true, { error: 'errors.majeur' }),
   cgu: z.literal(true, { error: 'errors.cgu' }),
+});
+
+/** Modification du profil : le pseudo garde les règles de l'inscription ; la ville ne vaut qu'en localisation manuelle. */
+export const profilSchema = z.object({
+  pseudo: inscriptionSchema.shape.pseudo,
+  bio: z.string().trim().max(500, { error: 'errors.bio' }).optional(),
+  ville: z.string().trim().max(80, { error: 'errors.ville' }).optional(),
+});
+
+export const motDePasseSchema = z.object({
+  actuel: z
+    .string()
+    .min(1, { error: 'errors.invalide' })
+    .max(128, { error: 'errors.invalide' }),
+  nouveau: inscriptionSchema.shape.motDePasse,
+});
+
+export const motDePasseOublieSchema = z.object({
+  email: z.email({ error: 'errors.email' }).max(254, { error: 'errors.email' }),
+});
+
+export const reinitialisationSchema = z.object({
+  jeton: z
+    .string()
+    .min(20, { error: 'errors.jetonInvalide' })
+    .max(200, { error: 'errors.jetonInvalide' }),
+  nouveau: inscriptionSchema.shape.motDePasse,
 });
 
 export const suppressionSchema = z.object({
@@ -90,6 +118,13 @@ export const declarationSchema = z
     error: 'errors.preuveSeulementOfferte',
     path: ['preuveUrl'],
   });
+
+export const modificationCompetenceSchema = z.object({
+  niveau: z.enum(NIVEAUX),
+  format: z.enum(FORMATS),
+  description: z.string().trim().max(500).optional(),
+  preuveUrl: z.union([lienWeb, z.literal('')]).optional(),
+});
 
 // ---------------------------------------------------------------------------
 // Lot 2 : recherche, créneaux, conversations, sessions, avis, signalements

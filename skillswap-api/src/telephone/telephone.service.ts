@@ -31,6 +31,13 @@ export class TelephoneService {
   }
 
   async demander(utilisateurId: string, telephone: string) {
+    // Changement de numéro : l'ancien reste vérifié tant que le nouveau ne l'est pas. Redemander le même ne sert à rien.
+    const actuel = await this.db.query(
+      `SELECT 1 FROM utilisateur WHERE id = $1 AND telephone = $2 AND telephone_verifie_le IS NOT NULL`,
+      [utilisateurId, telephone],
+    );
+    if (actuel.rowCount === 1)
+      throw new ErreurMetier('errors.telephoneIdentique', HttpStatus.CONFLICT);
     const { rows } = await this.db.query<{
       par_membre: string;
       par_numero: string;

@@ -3,6 +3,8 @@ export interface Config {
   production: boolean;
   databaseUrl: string;
   allowedOrigin: string;
+  /** Adresse publique du frontend, utilisée dans les liens envoyés par e-mail. */
+  appUrl: string;
   cookieSecure: boolean;
   smsPepper: string;
   sessionJours: number;
@@ -25,6 +27,10 @@ export function config(): Config {
       process.env.DATABASE_URL ??
       'postgres://postgres@localhost:5432/skillswap',
     allowedOrigin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:3000',
+    appUrl:
+      process.env.APP_URL ??
+      process.env.ALLOWED_ORIGIN ??
+      'http://localhost:3000',
     cookieSecure: process.env.COOKIE_SECURE
       ? process.env.COOKIE_SECURE === 'true'
       : production,

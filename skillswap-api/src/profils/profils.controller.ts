@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   Post,
   Query,
@@ -35,6 +37,12 @@ export class ProfilsController {
   @Get('moi/creneaux')
   mesCreneaux(@Utilisateur() u: UtilisateurCourant) {
     return this.profils.mesCreneaux(u.id);
+  }
+
+  @HttpCode(204)
+  @Delete('moi/creneaux/:id')
+  async annuler(@Utilisateur() u: UtilisateurCourant, @Param('id') id: string) {
+    await this.profils.annulerCreneau(u.id, uuidOuIntrouvable(id));
   }
 
   @Post('moi/creneaux')

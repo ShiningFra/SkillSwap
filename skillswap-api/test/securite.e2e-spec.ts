@@ -413,26 +413,40 @@ describe("Sécurité de l'API (ES1 à ES13)", () => {
   });
 
   describe('ES7 entrées hostiles', () => {
-    it("traite l'injection SQL comme du texte et la table reste intacte", async () => {
+    it("refuse un pseudo piégé et traite l'injection SQL comme du texte ailleurs", async () => {
       const piege = "'); DROP TABLE utilisateur;--";
-      const res = await post(
+      const refus = await post(
         request.agent(app.getHttpServer()),
         '/auth/inscription',
         {
           email: nouvelEmail(),
-          pseudo: piege,
+          pseudo: '<img src=x onerror=alert(1)>',
           motDePasse: MDP,
           majeur: true,
           cgu: true,
         },
       );
+      expect(refus.status).toBe(400);
+      const agent = request.agent(app.getHttpServer());
+      const res = await post(agent, '/auth/inscription', {
+        email: nouvelEmail(),
+        pseudo: 'Pseudo ordinaire',
+        motDePasse: MDP,
+        majeur: true,
+        cgu: true,
+      });
       expect(res.status).toBe(201);
+      await agent
+        .put('/moi/profil')
+        .set('Origin', ORIGINE)
+        .send({ pseudo: 'Pseudo ordinaire', bio: piege })
+        .expect(204);
       expect(
         (
-          await pool.query('SELECT pseudo FROM utilisateur WHERE id = $1', [
+          await pool.query('SELECT bio FROM utilisateur WHERE id = $1', [
             res.body.id,
           ])
-        ).rows[0].pseudo,
+        ).rows[0].bio,
       ).toBe(piege);
       const connexion = await post(
         request.agent(app.getHttpServer()),

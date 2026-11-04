@@ -6,7 +6,7 @@ Premier lot du backend : socle de sécurité (CDC 7.6, ES1 à ES13), comptes, t�
 
 ```bash
 createdb skillswap
-psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql
+psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql
 cp .env.example .env            # puis adapter
 npm run start:dev                # http://localhost:3001
 ```
@@ -85,3 +85,21 @@ UPDATE utilisateur SET role = 'ADMIN' WHERE email = 'ton@email';
 ## Compte (v0.6)
 
 `POST /moi/suppression` avec `{ "motDePasse": "..." }` : suppression par anonymisation (RG14), 204. Appliquer `db/007_suppression_compte.sql` sur une base existante (statut `SUPPRIME`). La recherche (`GET /profils`) renvoie maintenant `offres` (toutes les offres correspondantes) et `reciproques`.
+
+## Profil et créneaux (v0.7)
+
+`PUT /moi/profil` (pseudo, bio, ville ; la ville ne change qu'en localisation manuelle), `PUT /moi/competences/:id` (niveau, format, preuve), `DELETE /moi/creneaux/:id` (créneau libre uniquement ; un créneau réservé répond 409), `POST /moi/mot-de-passe` (ancien mot de passe exigé ; les autres sessions du compte sont révoquées). `GET /moi` renvoie aussi `bio`. Aucune migration SQL nouvelle.
+
+## Changement de numéro et mot de passe oublié (v0.8)
+- Le fichier `.env` (copie de `.env.example`) est lu au démarrage.
+- `POST /telephone/demande` refuse le numéro déjà vérifié (409). L'ancien numéro reste vérifié tant que le nouveau n'est pas confirmé.
+- `POST /auth/mot-de-passe-oublie` `{ email }` : réponse neutre 202 (ES3), 3 demandes/h/compte. `POST /auth/reinitialisation` `{ jeton, nouveau }` : 204, jeton aléatoire stocké haché (SHA-256), valable 1 h, à usage unique ; toutes les sessions sont fermées.
+- Appliquer `db/008_reinitialisation_mdp.sql` sur une base existante, puis `npm install` (nodemailer).
+- Variables : `APP_URL` (lien du mail, par défaut `ALLOWED_ORIGIN`), `SMTP_URL`, `MAIL_EXPEDITEUR`. Sans `SMTP_URL`, le mail s'affiche dans la console en développement ; en production l'envoi échoue (obligatoire).
+
+## Revue de sécurité (v0.8.1)
+Contrôles rejoués par script (`e2e/secu.js`) : cookies, en-têtes, accès sans session, CSRF, élévation de privilèges, accès aux données d'un autre membre, injection, énumération, sessions, jetons de réinitialisation, limitation de débit, CORS, fuites dans les réponses. Une requête qui modifie des données sans en-tête `Origin` mais avec un cookie de session est maintenant refusée (403).
+Le pseudo n'accepte que lettres, chiffres, espaces, point, tiret et apostrophe (v0.8.2) : un contenu comme `<img …>` y est refusé.
+
+## Diagnostic des e-mails (v0.8.3)
+La console de l'API journalise chaque envoi (`Envoyé à … depuis …`) et, hors production, la raison d'un non-envoi (`aucun compte actif`, `demandes dans l'heure`). L'échec d'envoi est toujours journalisé en erreur. Resend : `SMTP_URL=smtps://resend:CLE_API@smtp.resend.com:465`.
