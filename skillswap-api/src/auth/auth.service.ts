@@ -129,7 +129,7 @@ export class AuthService {
       telephone: string | null;
       telephoneVerifie: boolean;
     }>(
-      `SELECT id, pseudo, bio, role, mode_localisation AS "modeLocalisation", ville, telephone, (telephone_verifie_le IS NOT NULL) AS "telephoneVerifie" FROM utilisateur WHERE id = $1`,
+      `SELECT id, pseudo, bio, role, mdp_provisoire AS "mdpProvisoire", mode_localisation AS "modeLocalisation", ville, telephone, (telephone_verifie_le IS NOT NULL) AS "telephoneVerifie" FROM utilisateur WHERE id = $1`,
       [id],
     );
     const { telephone, ...reste } = rows[0];
@@ -165,7 +165,7 @@ export class AuthService {
     const nouveauHash = await hash(nouveau, PARAMS);
     await this.db.transaction(async (c) => {
       await c.query(
-        'UPDATE utilisateur SET mot_de_passe_hash = $2 WHERE id = $1',
+        'UPDATE utilisateur SET mot_de_passe_hash = $2, mdp_provisoire = false WHERE id = $1',
         [id, nouveauHash],
       );
       await c.query(

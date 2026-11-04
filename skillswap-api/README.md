@@ -6,7 +6,7 @@ Premier lot du backend : socle de sécurité (CDC 7.6, ES1 à ES13), comptes, t�
 
 ```bash
 createdb skillswap
-psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql
+psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql
 cp .env.example .env            # puis adapter
 npm run start:dev                # http://localhost:3001
 ```
@@ -76,6 +76,8 @@ Si les accents apparaissent abîmés (« FranÃ§ais ») dans `/competences`, la
 
 Routes réservées au rôle `ADMIN` (403 sinon) : `GET /admin/indicateurs`, `GET /admin/signalements`, `GET /admin/signalements/:id`, `POST /admin/signalements/:id/decision` (`AVERTIR`, `SUSPENDRE`, `REJETER`, commentaire facultatif). Chaque décision est tracée dans `journal_audit`.
 
+Gestion des administrateurs (mêmes droits, 5 requêtes/min, mot de passe de l'administrateur redemandé à chaque action, tout est audité) : `GET /admin/administrateurs`, `POST /admin/administrateurs/nommer` (promeut un membre actif par e-mail), `POST /admin/administrateurs/creer` (e-mail + pseudo ; renvoie **une seule fois** un mot de passe provisoire de 16 caractères), `POST /admin/administrateurs/:id/retirer`. Garde-fous : on ne se retire pas soi-même, on ne retire jamais le dernier administrateur, on ne nomme pas un compte suspendu ou supprimé. Tant qu'un compte créé n'a pas changé son mot de passe provisoire, toutes ses requêtes sont refusées (403 `errors.mdpProvisoire`) sauf `GET /moi` et `POST /moi/mot-de-passe`.
+
 Pour une base existante, applique `db/005_moderation.sql` puis `db/006_moderation_charge.sql` (gravité, retrait du motif « absence sans prévenir ») (nouveau type de notification `AVERTISSEMENT`). Pour te donner le rôle :
 
 ```sql
@@ -95,6 +97,8 @@ UPDATE utilisateur SET role = 'ADMIN' WHERE email = 'ton@email';
 - `POST /telephone/demande` refuse le numéro déjà vérifié (409). L'ancien numéro reste vérifié tant que le nouveau n'est pas confirmé.
 - `POST /auth/mot-de-passe-oublie` `{ email }` : réponse neutre 202 (ES3), 3 demandes/h/compte. `POST /auth/reinitialisation` `{ jeton, nouveau }` : 204, jeton aléatoire stocké haché (SHA-256), valable 1 h, à usage unique ; toutes les sessions sont fermées.
 - Appliquer `db/008_reinitialisation_mdp.sql` sur une base existante, puis `npm install` (nodemailer).
+- Appliquer `db/009_administrateurs.sql` (colonne `mdp_provisoire`) : `psql skillswap -f db/009_administrateurs.sql`.
+- Premier administrateur : `UPDATE utilisateur SET role = 'ADMIN' WHERE email = '…';` puis les suivants se gèrent depuis l'application.
 - Variables : `APP_URL` (lien du mail, par défaut `ALLOWED_ORIGIN`), `SMTP_URL`, `MAIL_EXPEDITEUR`. Sans `SMTP_URL`, le mail s'affiche dans la console en développement ; en production l'envoi échoue (obligatoire).
 
 ## Revue de sécurité (v0.8.1)

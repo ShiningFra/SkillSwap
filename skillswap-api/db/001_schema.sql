@@ -26,6 +26,7 @@ CREATE TABLE utilisateur (
     telephone_verifie_le  timestamptz,
     role                  varchar(10)  NOT NULL DEFAULT 'MEMBRE',
     statut                varchar(10)  NOT NULL DEFAULT 'ACTIF',
+    mdp_provisoire        boolean      NOT NULL DEFAULT false,         -- compte admin créé avec un mot de passe provisoire
     majeur_confirme_le    timestamptz  NOT NULL,                       -- RG1
     cree_le               timestamptz  NOT NULL DEFAULT now(),
     CONSTRAINT ck_utilisateur_mode   CHECK (mode_localisation IN ('AUCUNE','MANUELLE','AUTOMATIQUE')),

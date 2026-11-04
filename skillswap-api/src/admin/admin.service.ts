@@ -1,7 +1,12 @@
+import { randomInt } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { hash, verify } from '@node-rs/argon2';
 import { Audit } from '../common/audit.service';
 import { ErreurMetier } from '../common/erreurs';
 import { Db } from '../db/db.service';
+
+const PARAMS = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
 export type DecisionModeration = 'AVERTIR' | 'SUSPENDRE' | 'REJETER';
 
@@ -158,5 +163,83 @@ export class AdminService {
       );
     }
     await this.audit.enregistrer(adminId, 'MODERATION', id, { decision });
+  }
+
+  /** Mot de passe provisoire : 16 caractères tirés d'un CSPRNG, sans caractères ambigus. */
+  private genererMdp() {
+    return Array.from({ length: 16 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
+  }
+
+  /** Les actions sensibles redemandent le mot de passe de l'administrateur qui agit. */
+  private async confirmer(acteurId: string, mdp: string) {
+    const { rows } = await this.db.query<{ h: string }>(
+      'SELECT mot_de_passe_hash AS h FROM utilisateur WHERE id = $1',
+      [acteurId],
+    );
+    const ok = rows[0] ? await verify(rows[0].h, mdp).catch(() => false) : false;
+    if (!ok) throw new ErreurMetier('errors.identifiants', HttpStatus.UNAUTHORIZED);
+  }
+
+  async administrateurs() {
+    const { rows } = await this.db.query(
+      `SELECT id, pseudo, email, mdp_provisoire AS "mdpProvisoire", cree_le AS "creeLe"
+         FROM utilisateur WHERE role = 'ADMIN' AND statut = 'ACTIF' ORDER BY cree_le`,
+    );
+    return rows;
+  }
+
+  /** Promeut un membre existant (RG : compte actif uniquement). */
+  async nommer(acteurId: string, mdp: string, email: string) {
+    await this.confirmer(acteurId, mdp);
+    const { rows } = await this.db.query<{ id: string; role: string; statut: string }>(
+      'SELECT id, role, statut FROM utilisateur WHERE lower(email) = lower($1)',
+      [email.trim()],
+    );
+    const cible = rows[0];
+    if (!cible) throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+    if (cible.statut !== 'ACTIF')
+      throw new ErreurMetier('errors.compteInactif', HttpStatus.CONFLICT);
+    if (cible.role === 'ADMIN')
+      throw new ErreurMetier('errors.dejaAdmin', HttpStatus.CONFLICT);
+    await this.db.query("UPDATE utilisateur SET role = 'ADMIN' WHERE id = $1", [cible.id]);
+    await this.audit.enregistrer(acteurId, 'ADMIN_NOMME', cible.id);
+  }
+
+  /** Crée un compte administrateur ; le mot de passe provisoire n'est renvoyé qu'une fois. */
+  async creer(acteurId: string, mdp: string, email: string, pseudo: string) {
+    await this.confirmer(acteurId, mdp);
+    const provisoire = this.genererMdp();
+    const h = await hash(provisoire, PARAMS);
+    try {
+      const { rows } = await this.db.query<{ id: string }>(
+        `INSERT INTO utilisateur (email, mot_de_passe_hash, pseudo, role, mdp_provisoire, majeur_confirme_le)
+         VALUES ($1, $2, $3, 'ADMIN', true, now()) RETURNING id`,
+        [email.trim(), h, pseudo],
+      );
+      await this.audit.enregistrer(acteurId, 'ADMIN_CREE', rows[0].id);
+      return { id: rows[0].id, motDePasseProvisoire: provisoire };
+    } catch (e) {
+      if ((e as { code?: string }).code === '23505')
+        throw new ErreurMetier('errors.emailPris', HttpStatus.CONFLICT);
+      throw e;
+    }
+  }
+
+  /** Rétrograde un administrateur en membre. Jamais soi-même, jamais le dernier. */
+  async retirer(acteurId: string, mdp: string, cibleId: string) {
+    await this.confirmer(acteurId, mdp);
+    if (cibleId === acteurId)
+      throw new ErreurMetier('errors.retraitSoi', HttpStatus.CONFLICT);
+    await this.db.transaction(async (c) => {
+      const { rows } = await c.query<{ id: string }>(
+        "SELECT id FROM utilisateur WHERE role = 'ADMIN' AND statut = 'ACTIF' FOR UPDATE",
+      );
+      if (!rows.some((r) => r.id === cibleId))
+        throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+      if (rows.length <= 1)
+        throw new ErreurMetier('errors.dernierAdmin', HttpStatus.CONFLICT);
+      await c.query("UPDATE utilisateur SET role = 'MEMBRE' WHERE id = $1", [cibleId]);
+    });
+    await this.audit.enregistrer(acteurId, 'ADMIN_RETIRE', cibleId);
   }
 }

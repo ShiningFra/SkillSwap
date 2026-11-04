@@ -12,6 +12,7 @@ import { ErreurMetier } from './erreurs';
 
 export type UtilisateurCourant = { id: string; role: string };
 export const COOKIE_SESSION = 'sid';
+const ROUTES_MDP_PROVISOIRE = new Set(['GET /moi', 'POST /moi/mot-de-passe']);
 
 export const empreinte = (valeur: string) =>
   createHash('sha256').update(valeur).digest('hex');
@@ -28,14 +29,20 @@ export class SessionGuard implements CanActivate {
     const jeton: unknown = req.cookies?.[COOKIE_SESSION];
     if (typeof jeton !== 'string' || jeton.length < 20)
       throw new ErreurMetier('errors.nonConnecte', HttpStatus.UNAUTHORIZED);
-    const { rows } = await this.db.query<UtilisateurCourant>(
-      `SELECT u.id, u.role FROM session_connexion s JOIN utilisateur u ON u.id = s.utilisateur_id
+    const { rows } = await this.db.query<
+      UtilisateurCourant & { mdpProvisoire: boolean }
+    >(
+      `SELECT u.id, u.role, u.mdp_provisoire AS "mdpProvisoire" FROM session_connexion s JOIN utilisateur u ON u.id = s.utilisateur_id
         WHERE s.jeton_hash = $1 AND s.revoque_le IS NULL AND s.expire_le > now() AND u.statut = 'ACTIF'`,
       [empreinte(jeton)],
     );
     if (rows.length === 0)
       throw new ErreurMetier('errors.nonConnecte', HttpStatus.UNAUTHORIZED);
-    req.utilisateur = rows[0];
+    // Compte créé par un administrateur : tant que le mot de passe provisoire n'est pas changé, seules
+    // la lecture du profil et le changement de mot de passe sont permis.
+    if (rows[0].mdpProvisoire && !ROUTES_MDP_PROVISOIRE.has(`${req.method} ${req.path}`))
+      throw new ErreurMetier('errors.mdpProvisoire', HttpStatus.FORBIDDEN);
+    req.utilisateur = { id: rows[0].id, role: rows[0].role };
     return true;
   }
 }

@@ -25,6 +25,7 @@ export default async function () {
     '006_moderation_charge.sql',
     '007_suppression_compte.sql',
     '008_reinitialisation_mdp.sql',
+    '009_administrateurs.sql',
   ])
     await c.query(readFileSync(join(__dirname, '..', 'db', f), 'utf8'));
   await c.query(

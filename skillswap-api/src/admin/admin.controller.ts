@@ -8,7 +8,9 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
+import { inscriptionSchema } from '../shared/schemas';
 import { AdminGuard } from '../common/admin.guard';
 import { valider } from '../common/erreurs';
 import { Utilisateur } from '../common/session.guard';
@@ -25,6 +27,12 @@ const decisionSchema = z.object({
     .max(500, { error: 'errors.commentaire' })
     .optional(),
 });
+
+const confirmation = z.object({
+  motDePasse: z.string().min(1, { error: 'errors.invalide' }).max(128, { error: 'errors.invalide' }),
+});
+const nommerSchema = confirmation.extend({ email: inscriptionSchema.shape.email });
+const creerSchema = nommerSchema.extend({ pseudo: inscriptionSchema.shape.pseudo });
 
 /** Toutes les routes exigent le rôle ADMIN, vérifié côté serveur. */
 @UseGuards(AdminGuard)
@@ -56,5 +64,38 @@ export class AdminController {
   ) {
     const v = valider(decisionSchema, corps);
     await this.service.decider(u.id, id, v.decision, v.commentaire);
+  }
+
+  @Get('administrateurs')
+  administrateurs() {
+    return this.service.administrateurs();
+  }
+
+  @HttpCode(204)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('administrateurs/nommer')
+  async nommer(@Utilisateur() u: UtilisateurCourant, @Body() corps: unknown) {
+    const v = valider(nommerSchema, corps);
+    await this.service.nommer(u.id, v.motDePasse, v.email);
+  }
+
+  @HttpCode(201)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('administrateurs/creer')
+  creer(@Utilisateur() u: UtilisateurCourant, @Body() corps: unknown) {
+    const v = valider(creerSchema, corps);
+    return this.service.creer(u.id, v.motDePasse, v.email, v.pseudo);
+  }
+
+  @HttpCode(204)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('administrateurs/:id/retirer')
+  async retirer(
+    @Utilisateur() u: UtilisateurCourant,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() corps: unknown,
+  ) {
+    const v = valider(confirmation, corps);
+    await this.service.retirer(u.id, v.motDePasse, id);
   }
 }
