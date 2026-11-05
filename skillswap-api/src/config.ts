@@ -9,6 +9,8 @@ export interface Config {
   smsPepper: string;
   sessionJours: number;
   throttleLimit: number;
+  /** Clés VAPID du Web Push ; absentes, les notifications sur l'appareil sont désactivées. */
+  vapid: { publique: string; privee: string; contact: string } | null;
 }
 
 export function config(): Config {
@@ -37,5 +39,13 @@ export function config(): Config {
     smsPepper,
     sessionJours: 7,
     throttleLimit: Number(process.env.THROTTLE_LIMIT ?? 100),
+    vapid:
+      process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+        ? {
+            publique: process.env.VAPID_PUBLIC_KEY,
+            privee: process.env.VAPID_PRIVATE_KEY,
+            contact: process.env.VAPID_CONTACT ?? 'mailto:contact@exemple.cm',
+          }
+        : null,
   };
 }

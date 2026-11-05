@@ -45,6 +45,7 @@ export class ConversationsService {
     const { rows } = await this.db.query(
       `SELECT c.id, o.id AS "membreId", o.pseudo,
               (SELECT m.contenu FROM message m WHERE m.conversation_id = c.id ORDER BY m.envoye_le DESC LIMIT 1) AS "dernierMessage",
+              (SELECT count(*)::int FROM message m WHERE m.conversation_id = c.id AND m.expediteur_id <> $1 AND m.lu_le IS NULL) AS "nonLus",
               COALESCE((SELECT max(m.envoye_le) FROM message m WHERE m.conversation_id = c.id), c.cree_le) AS activite
          FROM conversation c
          JOIN utilisateur o ON o.id = CASE WHEN c.initiateur_id = $1 THEN c.destinataire_id ELSE c.initiateur_id END
@@ -55,6 +56,7 @@ export class ConversationsService {
       id: r.id,
       membre: { id: r.membreId, pseudo: r.pseudo },
       dernierMessage: r.dernierMessage ?? '',
+      nonLus: r.nonLus as number,
     }));
   }
 
@@ -80,6 +82,11 @@ export class ConversationsService {
     await this.db.query(
       'UPDATE message SET lu_le = now() WHERE conversation_id = $1 AND expediteur_id <> $2 AND lu_le IS NULL',
       [conversationId, moiId],
+    );
+    // Lire la conversation vaut lecture des notifications de message qui y mènent.
+    await this.db.query(
+      'UPDATE notification SET lu_le = now() WHERE utilisateur_id = $1 AND lien = $2 AND lu_le IS NULL',
+      [moiId, `/messages/${conversationId}`],
     );
     const [messages, creneaux] = await Promise.all([
       this.db.query(

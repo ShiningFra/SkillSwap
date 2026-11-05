@@ -9,6 +9,7 @@ import { EchangesModule } from './echanges/echanges.module';
 import { MembreModule } from './membre/membre.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProfilsModule } from './profils/profils.module';
+import { PushModule } from './push/push.module';
 import { TelephoneModule } from './telephone/telephone.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { TelephoneModule } from './telephone/telephone.module';
     ProfilsModule,
     EchangesModule,
     NotificationsModule,
+    PushModule,
     AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

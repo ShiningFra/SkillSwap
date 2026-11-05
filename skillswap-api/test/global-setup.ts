@@ -27,6 +27,7 @@ export default async function () {
     '008_reinitialisation_mdp.sql',
     '009_administrateurs.sql',
     '010_notification_lien.sql',
+    '011_push.sql',
   ])
     await c.query(readFileSync(join(__dirname, '..', 'db', f), 'utf8'));
   await c.query(

@@ -102,6 +102,11 @@ export class SessionsService {
     );
     if (!rows[0])
       throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+    // Ouvrir la fiche vaut lecture des notifications qui y mènent.
+    await this.db.query(
+      'UPDATE notification SET lu_le = now() WHERE utilisateur_id = $1 AND lien = $2 AND lu_le IS NULL',
+      [moiId, `/sessions/${id}`],
+    );
     return this.vue(moiId, rows[0]);
   }
 
