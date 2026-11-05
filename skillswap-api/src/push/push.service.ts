@@ -129,7 +129,13 @@ export class PushService implements OnModuleInit {
           // 404 et 410 : l'appareil s'est désabonné ; on ne garde pas un abonnement mort.
           if (statut === 404 || statut === 410)
             await this.db.query('DELETE FROM push_abonnement WHERE id = $1', [a.id]);
-          else this.journal.warn(`Push refusé (${statut ?? 'réseau'})`);
+          else {
+            const err = e as { code?: string; message?: string; body?: string };
+            const hote = new URL(a.endpoint).hostname;
+            this.journal.warn(
+              `Push non envoyé vers ${hote} : ${statut ? `statut ${statut} ${err.body ?? ''}`.trim() : (err.code ?? err.message ?? 'erreur inconnue')}`,
+            );
+          }
         }
       }),
     );
