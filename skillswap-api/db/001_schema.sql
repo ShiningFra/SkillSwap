@@ -242,6 +242,8 @@ CREATE TABLE notification (
     contenu         varchar(255) NOT NULL,
     cree_le         timestamptz  NOT NULL DEFAULT now(),
     lu_le           timestamptz,
+    lien            varchar(120),
+    CONSTRAINT ck_notification_lien CHECK (lien IS NULL OR lien ~ '^/[a-z0-9/_-]*$'),
     CONSTRAINT ck_notification_type CHECK (type IN
         ('NOUVEAU_MESSAGE','NOUVELLE_SUGGESTION','SESSION_PROPOSEE','SESSION_ACCEPTEE','SESSION_REFUSEE','RAPPEL_AVIS','AVERTISSEMENT_ABSENCE','SUSPENSION'))
 );

@@ -105,8 +105,8 @@ export class ConversationsService {
         [conversationId, moiId, texte],
       );
       await c.query(
-        `INSERT INTO notification (utilisateur_id, type, contenu) VALUES ($1, 'NOUVEAU_MESSAGE', 'Tu as un nouveau message')`,
-        [autre.id],
+        `INSERT INTO notification (utilisateur_id, type, contenu, lien) VALUES ($1, 'NOUVEAU_MESSAGE', 'Tu as un nouveau message', $2)`,
+        [autre.id, `/messages/${conversationId}`],
       );
     });
   }

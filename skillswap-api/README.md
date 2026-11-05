@@ -6,7 +6,7 @@ Premier lot du backend : socle de sécurité (CDC 7.6, ES1 à ES13), comptes, t�
 
 ```bash
 createdb skillswap
-psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql
+psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql -f db/010_notification_lien.sql
 cp .env.example .env            # puis adapter
 npm run start:dev                # http://localhost:3001
 ```
@@ -97,7 +97,7 @@ UPDATE utilisateur SET role = 'ADMIN' WHERE email = 'ton@email';
 - `POST /telephone/demande` refuse le numéro déjà vérifié (409). L'ancien numéro reste vérifié tant que le nouveau n'est pas confirmé.
 - `POST /auth/mot-de-passe-oublie` `{ email }` : réponse neutre 202 (ES3), 3 demandes/h/compte. `POST /auth/reinitialisation` `{ jeton, nouveau }` : 204, jeton aléatoire stocké haché (SHA-256), valable 1 h, à usage unique ; toutes les sessions sont fermées.
 - Appliquer `db/008_reinitialisation_mdp.sql` sur une base existante, puis `npm install` (nodemailer).
-- Appliquer `db/009_administrateurs.sql` (colonne `mdp_provisoire`) : `psql skillswap -f db/009_administrateurs.sql`.
+- Appliquer `db/010_notification_lien.sql` (liens des notifications), puis `db/009_administrateurs.sql` (colonne `mdp_provisoire`) : `psql skillswap -f db/009_administrateurs.sql`.
 - Premier administrateur : `UPDATE utilisateur SET role = 'ADMIN' WHERE email = '…';` puis les suivants se gèrent depuis l'application.
 - Variables : `APP_URL` (lien du mail, par défaut `ALLOWED_ORIGIN`), `SMTP_URL`, `MAIL_EXPEDITEUR`. Sans `SMTP_URL`, le mail s'affiche dans la console en développement ; en production l'envoi échoue (obligatoire).
 

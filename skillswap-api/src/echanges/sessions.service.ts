@@ -159,8 +159,8 @@ export class SessionsService {
           ],
         );
         await c.query(
-          `INSERT INTO notification (utilisateur_id, type, contenu) VALUES ($1, 'SESSION_PROPOSEE', 'Tu as reçu une proposition de session')`,
-          [autre.id],
+          `INSERT INTO notification (utilisateur_id, type, contenu, lien) VALUES ($1, 'SESSION_PROPOSEE', 'Tu as reçu une proposition de session', $2)`,
+          [autre.id, `/sessions/${rows[0].id}`],
         );
         return { id: rows[0].id };
       });
@@ -209,13 +209,14 @@ export class SessionsService {
           [s.creneau_id],
         );
       await c.query(
-        `INSERT INTO notification (utilisateur_id, type, contenu) VALUES ($1, $2, $3)`,
+        `INSERT INTO notification (utilisateur_id, type, contenu, lien) VALUES ($1, $2, $3, $4)`,
         [
           s.propose_par_id,
           accepter ? 'SESSION_ACCEPTEE' : 'SESSION_REFUSEE',
           accepter
             ? 'Ta proposition de session est acceptée'
             : 'Ta proposition de session est refusée',
+          `/sessions/${id}`,
         ],
       );
     });
@@ -301,8 +302,8 @@ export class SessionsService {
         );
       } else if (nb >= ABSENCES.avertissementDes) {
         await c.query(
-          `INSERT INTO notification (utilisateur_id, type, contenu) VALUES ($1, 'AVERTISSEMENT_ABSENCE', 'Une absence a été déclarée sur une de tes sessions')`,
-          [s.autre_id],
+          `INSERT INTO notification (utilisateur_id, type, contenu, lien) VALUES ($1, 'AVERTISSEMENT_ABSENCE', 'Une absence a été déclarée sur une de tes sessions', $2)`,
+          [s.autre_id, `/sessions/${id}`],
         );
       }
       return { absentId: s.autre_id, nb };

@@ -6,6 +6,7 @@ export interface LigneNotification {
   type: string;
   contenu: string;
   creeLe: Date;
+  lien: string | null;
   lue: boolean;
 }
 
@@ -16,7 +17,7 @@ export class NotificationsService {
   /** Les 50 dernières notifications du membre, et le nombre de celles qui ne sont pas lues. */
   async lister(moiId: string) {
     const { rows } = await this.db.query<LigneNotification>(
-      `SELECT id, type, contenu, cree_le AS "creeLe", (lu_le IS NOT NULL) AS lue
+      `SELECT id, type, contenu, cree_le AS "creeLe", lien, (lu_le IS NOT NULL) AS lue
          FROM notification WHERE utilisateur_id = $1 ORDER BY cree_le DESC LIMIT 50`,
       [moiId],
     );
