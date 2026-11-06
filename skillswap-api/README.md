@@ -6,7 +6,7 @@ Premier lot du backend : socle de sécurité (CDC 7.6, ES1 à ES13), comptes, t�
 
 ```bash
 createdb skillswap
-psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql -f db/010_notification_lien.sql -f db/011_push.sql
+psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql -f db/010_notification_lien.sql -f db/011_push.sql -f db/012_notification_lien_anciennes.sql
 cp .env.example .env            # puis adapter
 npm run start:dev                # http://localhost:3001
 ```
@@ -111,6 +111,7 @@ La console de l'API journalise chaque envoi (`Envoyé à … depuis …`) et, ho
 ## Notifications sur l'appareil (Web Push)
 
 - Appliquer `db/011_push.sql`, puis générer une paire de clés une seule fois : `npx web-push generate-vapid-keys`. Mettre `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` et `VAPID_CONTACT` dans `.env` (la clé privée ne se publie jamais). Sans ces clés, la fonction est désactivée et l'application fonctionne normalement.
+- Appliquer `db/012_notification_lien_anciennes.sql` (une fois) : les anciennes notifications de message mènent alors à leur conversation au lieu de la liste.
 - Routes : `GET /push/cle`, `POST /moi/push` (enregistre l'appareil), `POST /moi/push/retirer`. Un membre peut avoir 10 appareils au plus.
 - Un déclencheur PostgreSQL signale chaque nouvelle notification (LISTEN/NOTIFY) ; l'API envoie alors un push dont le texte est fixe selon le type, jamais le contenu d'un message.
 - Seuls les services de push des navigateurs (Google, Mozilla, Apple, Microsoft) sont appelés, pour éviter qu'un endpoint choisi par un membre vise le réseau interne.
