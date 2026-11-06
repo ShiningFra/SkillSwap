@@ -79,6 +79,11 @@ export class ConversationsService {
 
   async lire(moiId: string, conversationId: string) {
     const autre = await this.interlocuteur(moiId, conversationId);
+    // Premier message reçu non lu : l'écran s'ouvre à cet endroit, comme les messageries usuelles.
+    const nonLu = await this.db.query<{ id: string }>(
+      'SELECT id FROM message WHERE conversation_id = $1 AND expediteur_id <> $2 AND lu_le IS NULL ORDER BY envoye_le LIMIT 1',
+      [conversationId, moiId],
+    );
     await this.db.query(
       'UPDATE message SET lu_le = now() WHERE conversation_id = $1 AND expediteur_id <> $2 AND lu_le IS NULL',
       [conversationId, moiId],
@@ -98,6 +103,7 @@ export class ConversationsService {
     return {
       membre: { id: autre.id, pseudo: autre.pseudo, creneaux },
       messages: messages.rows,
+      premierNonLu: nonLu.rows[0]?.id ?? null,
     };
   }
 
