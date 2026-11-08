@@ -123,5 +123,6 @@ La console de l'API journalise chaque envoi (`Envoyé à … depuis …`) et, ho
 `multilingual-e5-small` exécuté dans l'API (paquet `@huggingface/transformers`). Au premier usage le modèle (~120 Mo) est téléchargé
 depuis Hugging Face puis gardé en cache ; compter ~300 Mo de mémoire et ~1 s pour vectoriser le catalogue au premier appel.
 - `EMBEDDINGS_DISABLED=true` coupe la fonction (l'application garde alors la recherche tolérante aux fautes et aux synonymes).
-- `EMBEDDINGS_DIR=/chemin/models` utilise une copie locale (`Xenova/multilingual-e5-small/` avec `config.json`, `tokenizer.json`, `tokenizer_config.json`, `onnx/model_quantized.onnx`), sans accès à internet.
+- **Modèle local, sans réglage :** décompresser `modele-multilingual-e5-small.zip` à la racine du projet API pour obtenir `models/Xenova/multilingual-e5-small/` (avec `config.json`, `tokenizer.json`, `tokenizer_config.json`, `onnx/model_quantized.onnx`). L'API le détecte toute seule, en développement comme en production : au déploiement, il suffit de copier ce dossier avec le code. Le dossier `models/` n'est pas versionné (`.gitignore`).
+- `EMBEDDINGS_DIR=/chemin/models` reste possible pour placer le dossier ailleurs ; sans dossier local, le modèle est téléchargé depuis Hugging Face au premier usage.
 - Si `npm install` échoue sur `onnxruntime-node` (réseau filtré), utiliser `npm install --ignore-scripts`.

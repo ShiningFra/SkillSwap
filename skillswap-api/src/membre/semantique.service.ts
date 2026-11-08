@@ -1,5 +1,7 @@
 import { ParametresService } from '../parametres/parametres.service';
 import { Injectable, Logger } from '@nestjs/common';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { Db } from '../db/db.service';
 
 /** E5 compresse les similarités autour de 0,8 : seuls les scores nettement au-dessus comptent (réglé sur le catalogue). */
@@ -28,6 +30,22 @@ export function classerParSimilarite(requete: number[], candidats: Candidat[]) {
     .map((n) => ({ id: n.id, score: Math.round(n.score * 1000) / 1000 }));
 }
 
+/** Dossier contenant `Xenova/multilingual-e5-small/` : EMBEDDINGS_DIR, sinon `models/` à la racine du projet API. */
+function dossierModeles(): string | null {
+  const fichier = join(
+    'Xenova',
+    'multilingual-e5-small',
+    'onnx',
+    'model_quantized.onnx',
+  );
+  const candidats = [
+    process.env.EMBEDDINGS_DIR,
+    resolve(__dirname, '..', '..', 'models'),
+    resolve(process.cwd(), 'models'),
+  ].filter((d): d is string => !!d);
+  return candidats.find((d) => existsSync(join(d, fichier))) ?? null;
+}
+
 type Extracteur = (
   textes: string[],
   options: { pooling: 'mean'; normalize: true },
@@ -37,7 +55,8 @@ type Extracteur = (
  * Recherche par le sens (« faire des gâteaux » → Pâtisserie) avec multilingual-e5-small, exécuté dans l'API :
  * aucun service externe. Le modèle se charge à la première requête ; s'il est indisponible, la fonction se
  * désactive sans gêner le reste (l'application garde sa recherche tolérante aux fautes).
- * EMBEDDINGS_DISABLED=true la coupe ; EMBEDDINGS_DIR pointe vers une copie locale du modèle (sinon téléchargement unique).
+ * Le modèle est cherché dans `models/` à la racine du projet API (aucune variable à régler) ; à défaut, dans EMBEDDINGS_DIR,
+ * sinon il est téléchargé une fois depuis Hugging Face. EMBEDDINGS_DISABLED=true coupe la fonction.
  */
 @Injectable()
 export class SemantiqueService {
@@ -62,9 +81,15 @@ export class SemantiqueService {
         const { pipeline, env } = (await new Function('m', 'return import(m)')(
           '@huggingface/transformers',
         )) as typeof import('@huggingface/transformers');
-        if (process.env.EMBEDDINGS_DIR) {
-          env.localModelPath = process.env.EMBEDDINGS_DIR;
+        const dossier = dossierModeles();
+        if (dossier) {
+          env.localModelPath = dossier;
           env.allowRemoteModels = false;
+          this.journal.log(`Modèle local : ${dossier}`);
+        } else {
+          this.journal.log(
+            'Modèle absent de models/ : téléchargement depuis Hugging Face',
+          );
         }
         const ex = await pipeline(
           'feature-extraction',
@@ -120,7 +145,11 @@ export class SemantiqueService {
 
   async proches(texte: string): Promise<{ id: string; score: number }[]> {
     const q = texte.trim().slice(0, 100);
-    if (!this.actif() || q.length < 3 || !(await this.parametres.actif('recherche_semantique')))
+    if (
+      !this.actif() ||
+      q.length < 3 ||
+      !(await this.parametres.actif('recherche_semantique'))
+    )
       return [];
     try {
       const cat = await this.catalogue();
