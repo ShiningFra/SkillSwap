@@ -63,10 +63,10 @@ describe('Paramètres : interrupteurs de fonctionnalités', () => {
       .set('Origin', ORIGINE)
       .send({ motDePasse: MDP, ...corps });
 
-  it('liste publique : six interrupteurs, tous actifs au départ', async () => {
+  it('liste publique : sept interrupteurs, tous actifs au départ', async () => {
     const res = await request(app.getHttpServer()).get('/parametres');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(6);
+    expect(res.body).toHaveLength(7);
     expect(res.body.every((p: { actif: boolean }) => p.actif)).toBe(true);
   });
 

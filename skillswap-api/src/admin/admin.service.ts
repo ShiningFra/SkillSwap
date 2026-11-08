@@ -9,6 +9,12 @@ import type { ClePametre } from '../parametres/parametres.service';
 import { Audit } from '../common/audit.service';
 import { ErreurMetier } from '../common/erreurs';
 import { Db } from '../db/db.service';
+import {
+  libererSequestre,
+  rembourserSequestre,
+  type SessionPayee,
+} from '../portefeuille/grand-livre';
+import { PORTEFEUILLE } from '../shared/domain';
 
 const PARAMS = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
@@ -177,6 +183,96 @@ export class AdminService {
       { length: 16 },
       () => ALPHABET[randomInt(ALPHABET.length)],
     ).join('');
+  }
+
+  /** Vue d'ensemble du portefeuille : encours, contrôle de cohérence du grand livre et paiements bloqués. */
+  async portefeuille() {
+    const { rows } = await this.db.query<{
+      disponible: string;
+      sequestre: string;
+      ledger: string;
+      recharges: string;
+      retraits: string;
+    }>(
+      `SELECT
+         (SELECT coalesce(sum(disponible), 0) FROM portefeuille)::text AS disponible,
+         (SELECT coalesce(sum(sequestre), 0) FROM portefeuille)::text AS sequestre,
+         (SELECT coalesce(sum(delta_disponible + delta_sequestre), 0) FROM ecriture_portefeuille)::text AS ledger,
+         (SELECT coalesce(sum(montant), 0) FROM transaction_externe WHERE sens = 'RECHARGE' AND statut = 'REUSSIE')::text AS recharges,
+         (SELECT coalesce(sum(montant), 0) FROM transaction_externe WHERE sens = 'RETRAIT' AND statut = 'REUSSIE')::text AS retraits`,
+    );
+    const r = rows[0];
+    const encours = Number(r.disponible) + Number(r.sequestre);
+    // Le total des soldes doit égaler recharges moins retraits : tout écart signale un défaut à investiguer.
+    const attendu = Number(r.recharges) - Number(r.retraits);
+    const bloques = await this.db.query<{
+      id: string;
+      prix: number;
+      date_heure: Date;
+      enseignant: string;
+      apprenant: string;
+    }>(
+      `SELECT s.id, s.prix, s.date_heure, e.pseudo AS enseignant, a.pseudo AS apprenant
+         FROM session_echange s
+         JOIN utilisateur e ON e.id = s.enseignant_id
+         JOIN utilisateur a ON a.id = s.apprenant_id
+        WHERE s.paiement = 'SEQUESTRE' AND s.date_heure < now() - make_interval(days => $1)
+        ORDER BY s.date_heure`,
+      [PORTEFEUILLE.blocageJours],
+    );
+    return {
+      disponible: Number(r.disponible),
+      sequestre: Number(r.sequestre),
+      recharges: Number(r.recharges),
+      retraits: Number(r.retraits),
+      coherent: encours === Number(r.ledger) && encours === attendu,
+      blocageJours: PORTEFEUILLE.blocageJours,
+      bloques: bloques.rows.map((b) => ({
+        id: b.id,
+        prix: b.prix,
+        date: b.date_heure,
+        enseignant: b.enseignant,
+        apprenant: b.apprenant,
+      })),
+    };
+  }
+
+  /** Arbitrage d'un paiement resté en séquestre : versé à l'enseignant ou rendu à l'apprenant. */
+  async trancher(
+    acteurId: string,
+    mdp: string,
+    sessionId: string,
+    issue: 'LIBERER' | 'REMBOURSER',
+  ) {
+    await this.confirmer(acteurId, mdp);
+    await this.db.transaction(async (c) => {
+      const { rows } = await c.query<SessionPayee>(
+        `SELECT id, apprenant_id, enseignant_id, prix FROM session_echange
+          WHERE id = $1 AND paiement = 'SEQUESTRE' FOR UPDATE`,
+        [sessionId],
+      );
+      if (!rows[0])
+        throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+      if (issue === 'LIBERER') {
+        await libererSequestre(c, rows[0]);
+        await c.query(
+          `UPDATE session_echange SET statut = 'REALISEE', realisee_le = now(),
+             confirme_enseignant_le = COALESCE(confirme_enseignant_le, now()),
+             confirme_apprenant_le = COALESCE(confirme_apprenant_le, now())
+           WHERE id = $1 AND statut = 'ACCEPTEE'`,
+          [sessionId],
+        );
+      } else {
+        await rembourserSequestre(c, rows[0]);
+        await c.query(
+          `UPDATE session_echange SET statut = 'NON_REALISEE' WHERE id = $1 AND statut = 'ACCEPTEE'`,
+          [sessionId],
+        );
+      }
+    });
+    await this.audit.enregistrer(acteurId, 'PAIEMENT_TRANCHE', sessionId, {
+      issue,
+    });
   }
 
   /** Les actions sensibles redemandent le mot de passe de l'administrateur qui agit. */

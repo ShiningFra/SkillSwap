@@ -10,6 +10,7 @@ import { MembreModule } from './membre/membre.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProfilsModule } from './profils/profils.module';
 import { ParametresModule } from './parametres/parametres.module';
+import { PortefeuilleModule } from './portefeuille/portefeuille.module';
 import { PushModule } from './push/push.module';
 import { TelephoneModule } from './telephone/telephone.module';
 
@@ -32,6 +33,7 @@ import { TelephoneModule } from './telephone/telephone.module';
     EchangesModule,
     NotificationsModule,
     PushModule,
+    PortefeuilleModule,
     AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

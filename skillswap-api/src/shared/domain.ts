@@ -16,6 +16,7 @@ export const CONTREPARTIES = [
   'TROC',
   'ARGENT_HORS_PLATEFORME',
   'GRATUIT',
+  'ARGENT_PLATEFORME',
 ] as const; // session_echange.contrepartie (RG16)
 export const STATUTS_SESSION = [
   'PROPOSEE',
@@ -168,3 +169,16 @@ export const EXPIRATION_PROPOSITION_HEURES = 72;
 export const PALIERS_DISTANCE_KM = [1, 2, 5, 10, 20, 50, 100, 200] as const;
 export const palierKm = (distanceKm: number): number =>
   PALIERS_DISTANCE_KM.find((p) => distanceKm <= p) ?? 200;
+
+/** Lot 1bis : montants en FCFA entiers ; plafonds de la phase de test (CDC, risque de fraude). */
+export const PORTEFEUILLE = {
+  rechargeMin: 500,
+  rechargeMax: 100_000,
+  soldeMax: 500_000,
+  retraitMin: 500,
+  prixMin: 500,
+  prixMax: 100_000,
+  attenteMinutes: 30,
+  blocageJours: 7,
+} as const;
+export const OPERATEURS = ['MTN', 'ORANGE'] as const;

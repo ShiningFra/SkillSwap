@@ -31,6 +31,7 @@ export default async function () {
     '013_competences_catalogue.sql',
     '014_parametres.sql',
     '015_notification_signalement.sql',
+    '016_portefeuille.sql',
   ])
     await c.query(readFileSync(join(__dirname, '..', 'db', f), 'utf8'));
   await c.query(

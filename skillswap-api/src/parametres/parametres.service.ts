@@ -10,6 +10,7 @@ export const CLES_PARAMETRES = [
   'recherche_semantique',
   'sessions_distance',
   'notifications_push',
+  'portefeuille',
 ] as const;
 export type ClePametre = (typeof CLES_PARAMETRES)[number];
 

@@ -11,9 +11,9 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
-import { inscriptionSchema } from '../shared/schemas';
+import { inscriptionSchema, tribunalSchema } from '../shared/schemas';
 import { AdminGuard } from '../common/admin.guard';
-import { valider } from '../common/erreurs';
+import { uuidOuIntrouvable, valider } from '../common/erreurs';
 import { Utilisateur } from '../common/session.guard';
 import type { UtilisateurCourant } from '../common/session.guard';
 import { AdminService } from './admin.service';
@@ -55,6 +55,28 @@ const creerSchema = nommerSchema.extend({
 @Controller('admin')
 export class AdminController {
   constructor(private readonly service: AdminService) {}
+
+  @Get('portefeuille')
+  portefeuille() {
+    return this.service.portefeuille();
+  }
+
+  @HttpCode(204)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post('sessions/:id/paiement')
+  async trancher(
+    @Utilisateur() u: UtilisateurCourant,
+    @Param('id') id: string,
+    @Body() corps: unknown,
+  ) {
+    const v = valider(tribunalSchema, corps);
+    await this.service.trancher(
+      u.id,
+      v.motDePasse,
+      uuidOuIntrouvable(id),
+      v.issue,
+    );
+  }
 
   @Get('parametres')
   parametres() {

@@ -4,6 +4,10 @@ import { randomBytes } from 'node:crypto';
 import { Audit } from '../common/audit.service';
 import { ErreurMetier } from '../common/erreurs';
 import { Db } from '../db/db.service';
+import {
+  rembourserSequestre,
+  type SessionPayee,
+} from '../portefeuille/grand-livre';
 
 /**
  * RG14 : suppression de compte par anonymisation, dans une seule transaction.
@@ -32,6 +36,29 @@ export class SuppressionService {
       throw new ErreurMetier('errors.identifiants', HttpStatus.UNAUTHORIZED);
 
     await this.db.transaction(async (c) => {
+      // Portefeuille : les prix en séquestre sont rendus aux apprenants, puis le solde doit être vide.
+      const bloquees = await c.query<SessionPayee>(
+        `SELECT id, apprenant_id, enseignant_id, prix FROM session_echange
+          WHERE paiement = 'SEQUESTRE' AND $1 IN (enseignant_id, apprenant_id) FOR UPDATE`,
+        [id],
+      );
+      for (const sp of bloquees.rows) {
+        await rembourserSequestre(c, sp);
+        await c.query(
+          `UPDATE session_echange SET statut = 'ANNULEE' WHERE id = $1`,
+          [sp.id],
+        );
+      }
+      const portefeuille = await c.query<{ reste: string }>(
+        `SELECT (disponible + sequestre)::text AS reste FROM portefeuille WHERE utilisateur_id = $1`,
+        [id],
+      );
+      const enAttente = await c.query(
+        `SELECT 1 FROM transaction_externe WHERE utilisateur_id = $1 AND statut = 'EN_ATTENTE'`,
+        [id],
+      );
+      if (Number(portefeuille.rows[0]?.reste ?? 0) > 0 || enAttente.rowCount)
+        throw new ErreurMetier('errors.soldeNonVide', HttpStatus.CONFLICT);
       // Sessions à venir annulées, créneaux de l'autre membre libérés.
       await c.query(
         `UPDATE creneau SET statut = 'LIBRE'

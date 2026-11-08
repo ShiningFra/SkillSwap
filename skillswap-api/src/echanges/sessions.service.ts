@@ -7,6 +7,12 @@ import { ErreurMetier, traduirePg } from '../common/erreurs';
 import { Db } from '../db/db.service';
 import { ABSENCES, EXPIRATION_PROPOSITION_HEURES } from '../shared/domain';
 import { avisSchema, propositionSchema } from '../shared/schemas';
+import {
+  bloquerSequestre,
+  libererSequestre,
+  rembourserSequestre,
+  type SessionPayee,
+} from '../portefeuille/grand-livre';
 import { libelleDate } from '../profils/profils.service';
 import { ConversationsService } from './conversations.service';
 
@@ -25,6 +31,8 @@ interface LigneSession {
   confirme_enseignant_le: Date | null;
   confirme_apprenant_le: Date | null;
   absent_id: string | null;
+  prix: number | null;
+  paiement: string;
   autre_id: string;
   autre_pseudo: string;
   avis_donne: boolean;
@@ -32,7 +40,7 @@ interface LigneSession {
 
 const SELECT_SESSION = `
   SELECT s.id, s.competence_id, s.date_heure, s.format, s.lieu_type, s.lieu_ou_lien, s.contrepartie, s.statut, s.propose_par_id,
-         s.enseignant_id, s.apprenant_id, s.confirme_enseignant_le, s.confirme_apprenant_le, s.absent_id,
+         s.enseignant_id, s.apprenant_id, s.confirme_enseignant_le, s.confirme_apprenant_le, s.absent_id, s.prix, s.paiement,
          o.id AS autre_id, o.pseudo AS autre_pseudo,
          EXISTS (SELECT 1 FROM avis a WHERE a.session_id = s.id AND a.auteur_id = $1) AS avis_donne
     FROM session_echange s
@@ -66,6 +74,12 @@ export class SessionsService {
       lieuType: s.lieu_type ?? undefined,
       lien: s.format === 'DISTANCE' ? (s.lieu_ou_lien ?? undefined) : undefined,
       contrepartie: s.contrepartie,
+      prix: s.prix ?? undefined,
+      paiement: s.contrepartie === 'ARGENT_PLATEFORME' ? s.paiement : undefined,
+      jePaie:
+        s.contrepartie === 'ARGENT_PLATEFORME'
+          ? s.apprenant_id === moiId
+          : undefined,
       statut: s.statut,
       proposeParMoi: s.propose_par_id === moiId,
       mesConfirmation: miennes !== null,
@@ -131,6 +145,16 @@ export class SessionsService {
       throw new ErreurMetier('errors.membreSupprime', HttpStatus.GONE);
     if (v.format === 'DISTANCE')
       await this.parametres.exiger('sessions_distance');
+    if (v.contrepartie === 'ARGENT_PLATEFORME') {
+      await this.parametres.exiger('portefeuille');
+      // Le prix doit pouvoir être couvert dès la proposition (il est bloqué à l'acceptation).
+      const { rows } = await this.db.query<{ d: string }>(
+        'SELECT disponible::text AS d FROM portefeuille WHERE utilisateur_id = $1',
+        [moiId],
+      );
+      if (Number(rows[0]?.d ?? 0) < (v.prix ?? 0))
+        throw new ErreurMetier('errors.soldeInsuffisant', HttpStatus.CONFLICT);
+    }
     try {
       return await this.db.transaction(async (c) => {
         const k = await c.query<{ debut: Date; fin: Date; format: string }>(
@@ -154,8 +178,8 @@ export class SessionsService {
           competenceId = offres.rows[0].competence_id;
         }
         const { rows } = await c.query<{ id: string }>(
-          `INSERT INTO session_echange (conversation_id, enseignant_id, apprenant_id, propose_par_id, competence_id, creneau_id, date_heure, duree_min, format, lieu_type, contrepartie)
-           VALUES ($1, $2, $3, $3, $4, $5, $6, GREATEST(1, (extract(epoch FROM ($7::timestamptz - $6::timestamptz)) / 60)::int), $8, $9, $10) RETURNING id`,
+          `INSERT INTO session_echange (conversation_id, enseignant_id, apprenant_id, propose_par_id, competence_id, creneau_id, date_heure, duree_min, format, lieu_type, contrepartie, prix)
+           VALUES ($1, $2, $3, $3, $4, $5, $6, GREATEST(1, (extract(epoch FROM ($7::timestamptz - $6::timestamptz)) / 60)::int), $8, $9, $10, $11) RETURNING id`,
           [
             conversationId,
             autre.id,
@@ -167,6 +191,7 @@ export class SessionsService {
             v.format,
             v.lieuType ?? null,
             v.contrepartie,
+            v.prix ?? null,
           ],
         );
         await c.query(
@@ -235,6 +260,10 @@ export class SessionsService {
           'errors.sessionDejaTraitee',
           HttpStatus.CONFLICT,
         );
+      if (accepter && s.contrepartie === 'ARGENT_PLATEFORME') {
+        await this.parametres.exiger('portefeuille');
+        await bloquerSequestre(c, s as unknown as SessionPayee);
+      }
       await c.query('UPDATE session_echange SET statut = $2 WHERE id = $1', [
         id,
         accepter ? 'ACCEPTEE' : 'REFUSEE',
@@ -280,11 +309,14 @@ export class SessionsService {
         `UPDATE session_echange SET ${colonne} = COALESCE(${colonne}, now()) WHERE id = $1`,
         [id],
       );
-      await c.query(
+      const fin = await c.query(
         `UPDATE session_echange SET statut = 'REALISEE', realisee_le = now()
-          WHERE id = $1 AND confirme_enseignant_le IS NOT NULL AND confirme_apprenant_le IS NOT NULL`,
+          WHERE id = $1 AND confirme_enseignant_le IS NOT NULL AND confirme_apprenant_le IS NOT NULL RETURNING id`,
         [id],
       );
+      // Les deux ont confirmé : le prix en séquestre est versé à l'enseignant.
+      if (fin.rowCount && s.paiement === 'SEQUESTRE')
+        await libererSequestre(c, s as unknown as SessionPayee);
     });
   }
 
@@ -318,6 +350,9 @@ export class SessionsService {
         `UPDATE session_echange SET statut = 'NON_REALISEE', absent_id = $2 WHERE id = $1`,
         [id, s.autre_id],
       );
+      // Sans accord des deux parties, l'argent ne va à personne : il retourne à l'apprenant.
+      if (s.paiement === 'SEQUESTRE')
+        await rembourserSequestre(c, s as unknown as SessionPayee);
       const { rows } = await c.query<{ nb: number }>(
         'SELECT nb_absences_90j::int AS nb FROM v_absences WHERE utilisateur_id = $1',
         [s.autre_id],
