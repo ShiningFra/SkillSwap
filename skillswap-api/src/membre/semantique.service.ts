@@ -70,6 +70,14 @@ export class SemantiqueService {
     private readonly parametres: ParametresService,
   ) {}
 
+  private dejaSignale = new Set<string>();
+  /** Explique une fois pourquoi la recherche par le sens ne répond pas (évite le silence déroutant). */
+  private signaler(raison: string) {
+    if (this.dejaSignale.has(raison)) return;
+    this.dejaSignale.add(raison);
+    this.journal.warn(`Recherche par le sens inactive : ${raison}`);
+  }
+
   private actif() {
     return process.env.EMBEDDINGS_DISABLED !== 'true';
   }
@@ -145,12 +153,15 @@ export class SemantiqueService {
 
   async proches(texte: string): Promise<{ id: string; score: number }[]> {
     const q = texte.trim().slice(0, 100);
-    if (
-      !this.actif() ||
-      q.length < 3 ||
-      !(await this.parametres.actif('recherche_semantique'))
-    )
+    if (q.length < 3) return [];
+    if (!this.actif()) {
+      this.signaler('coupée par EMBEDDINGS_DISABLED=true');
       return [];
+    }
+    if (!(await this.parametres.actif('recherche_semantique'))) {
+      this.signaler('en révision dans Paramètres et fonctionnalités (admin)');
+      return [];
+    }
     try {
       const cat = await this.catalogue();
       if (cat.length === 0) return [];
