@@ -6,7 +6,7 @@ Premier lot du backend : socle de sécurité (CDC 7.6, ES1 à ES13), comptes, t�
 
 ```bash
 createdb skillswap
-psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql -f db/010_notification_lien.sql -f db/011_push.sql -f db/012_notification_lien_anciennes.sql
+psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql -f db/010_notification_lien.sql -f db/011_push.sql -f db/012_notification_lien_anciennes.sql -f db/013_competences_catalogue.sql -f db/014_parametres.sql
 cp .env.example .env            # puis adapter
 npm run start:dev                # http://localhost:3001
 ```
@@ -116,3 +116,12 @@ La console de l'API journalise chaque envoi (`Envoyé à … depuis …`) et, ho
 - Un déclencheur PostgreSQL signale chaque nouvelle notification (LISTEN/NOTIFY) ; l'API envoie alors un push dont le texte est fixe selon le type, jamais le contenu d'un message.
 - Seuls les services de push des navigateurs (Google, Mozilla, Apple, Microsoft) sont appelés, pour éviter qu'un endpoint choisi par un membre vise le réseau interne.
 - HTTPS obligatoire en ligne (localhost excepté). Sur iPhone, le site doit être ajouté à l'écran d'accueil.
+
+## Recherche par le sens (embeddings)
+
+`GET /competences/proches?q=…` trouve les compétences voisines par le sens (« faire des gâteaux » → Pâtisserie) avec le modèle
+`multilingual-e5-small` exécuté dans l'API (paquet `@huggingface/transformers`). Au premier usage le modèle (~120 Mo) est téléchargé
+depuis Hugging Face puis gardé en cache ; compter ~300 Mo de mémoire et ~1 s pour vectoriser le catalogue au premier appel.
+- `EMBEDDINGS_DISABLED=true` coupe la fonction (l'application garde alors la recherche tolérante aux fautes et aux synonymes).
+- `EMBEDDINGS_DIR=/chemin/models` utilise une copie locale (`Xenova/multilingual-e5-small/` avec `config.json`, `tokenizer.json`, `tokenizer_config.json`, `onnx/model_quantized.onnx`), sans accès à internet.
+- Si `npm install` échoue sur `onnxruntime-node` (réseau filtré), utiliser `npm install --ignore-scripts`.

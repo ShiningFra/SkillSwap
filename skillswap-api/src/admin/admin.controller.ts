@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -29,16 +30,54 @@ const decisionSchema = z.object({
 });
 
 const confirmation = z.object({
-  motDePasse: z.string().min(1, { error: 'errors.invalide' }).max(128, { error: 'errors.invalide' }),
+  motDePasse: z
+    .string()
+    .min(1, { error: 'errors.invalide' })
+    .max(128, { error: 'errors.invalide' }),
 });
-const nommerSchema = confirmation.extend({ email: inscriptionSchema.shape.email });
-const creerSchema = nommerSchema.extend({ pseudo: inscriptionSchema.shape.pseudo });
+const parametreSchema = confirmation.extend({
+  actif: z.boolean({ error: 'errors.invalide' }),
+  message: z
+    .string()
+    .trim()
+    .max(200, { error: 'errors.commentaire' })
+    .nullish(),
+});
+const nommerSchema = confirmation.extend({
+  email: inscriptionSchema.shape.email,
+});
+const creerSchema = nommerSchema.extend({
+  pseudo: inscriptionSchema.shape.pseudo,
+});
 
 /** Toutes les routes exigent le rôle ADMIN, vérifié côté serveur. */
 @UseGuards(AdminGuard)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly service: AdminService) {}
+
+  @Get('parametres')
+  parametres() {
+    return this.service.listerParametres();
+  }
+
+  @HttpCode(204)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Put('parametres/:cle')
+  async modifierParametre(
+    @Utilisateur() u: UtilisateurCourant,
+    @Param('cle') cle: string,
+    @Body() corps: unknown,
+  ) {
+    const v = valider(parametreSchema, corps);
+    await this.service.modifierParametre(
+      u.id,
+      v.motDePasse,
+      cle,
+      v.actif,
+      v.message || null,
+    );
+  }
 
   @Get('indicateurs')
   indicateurs() {

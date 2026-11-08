@@ -1,3 +1,4 @@
+import { ParametresService } from '../parametres/parametres.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   createHmac,
@@ -21,6 +22,7 @@ export class TelephoneService {
     private readonly db: Db,
     private readonly sms: SmsPort,
     private readonly audit: Audit,
+    private readonly parametres: ParametresService,
   ) {}
 
   /** RG17 : le code n'est jamais stocké. On garde un HMAC avec un secret serveur (un simple SHA-256 de 6 chiffres se casse en une seconde). */
@@ -31,6 +33,7 @@ export class TelephoneService {
   }
 
   async demander(utilisateurId: string, telephone: string) {
+    await this.parametres.exiger('verification_telephone');
     // Changement de numéro : l'ancien reste vérifié tant que le nouveau ne l'est pas. Redemander le même ne sert à rien.
     const actuel = await this.db.query(
       `SELECT 1 FROM utilisateur WHERE id = $1 AND telephone = $2 AND telephone_verifie_le IS NOT NULL`,
@@ -74,6 +77,7 @@ export class TelephoneService {
   }
 
   async verifier(utilisateurId: string, code: string) {
+    await this.parametres.exiger('verification_telephone');
     await this.db
       .transaction(async (c) => {
         const { rows } = await c.query<{

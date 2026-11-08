@@ -105,6 +105,18 @@ const lienWeb = z
   .max(500, { error: 'errors.lien' })
   .refine((v) => /^https?:\/\/\S+$/i.test(v), { error: 'errors.lien' });
 
+/** Lien de visioconférence d'une session à distance : https uniquement, ou vide pour le retirer. */
+export const lienSessionSchema = z.object({
+  lien: z.union([
+    z
+      .string()
+      .trim()
+      .max(255, { error: 'errors.lien' })
+      .refine((v) => /^https:\/\/\S+$/i.test(v), { error: 'errors.lien' }),
+    z.literal(''),
+  ]),
+});
+
 export const declarationSchema = z
   .object({
     competenceId: z.uuid({ error: 'errors.competence' }),

@@ -45,7 +45,8 @@ export class Db implements OnModuleDestroy {
       client.on('notification', (m) => rappel(m.payload ?? ''));
       client.on('error', () => {
         void client.end().catch(() => undefined);
-        if (!this.arrete) setTimeout(() => void ouvrir().catch(() => undefined), 5000);
+        if (!this.arrete)
+          setTimeout(() => void ouvrir().catch(() => undefined), 5000);
       });
       await client.connect();
       await client.query(`LISTEN ${canal}`);

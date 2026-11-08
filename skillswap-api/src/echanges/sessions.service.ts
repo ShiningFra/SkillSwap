@@ -1,3 +1,4 @@
+import { ParametresService } from '../parametres/parametres.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ interface LigneSession {
   competence_id: string;
   date_heure: Date;
   format: string;
+  lieu_ou_lien: string | null;
   lieu_type: string | null;
   contrepartie: string;
   statut: string;
@@ -29,7 +31,7 @@ interface LigneSession {
 }
 
 const SELECT_SESSION = `
-  SELECT s.id, s.competence_id, s.date_heure, s.format, s.lieu_type, s.contrepartie, s.statut, s.propose_par_id,
+  SELECT s.id, s.competence_id, s.date_heure, s.format, s.lieu_type, s.lieu_ou_lien, s.contrepartie, s.statut, s.propose_par_id,
          s.enseignant_id, s.apprenant_id, s.confirme_enseignant_le, s.confirme_apprenant_le, s.absent_id,
          o.id AS autre_id, o.pseudo AS autre_pseudo,
          EXISTS (SELECT 1 FROM avis a WHERE a.session_id = s.id AND a.auteur_id = $1) AS avis_donne
@@ -43,6 +45,7 @@ export class SessionsService {
     private readonly db: Db,
     private readonly conversations: ConversationsService,
     private readonly audit: Audit,
+    private readonly parametres: ParametresService,
   ) {}
 
   private vue(moiId: string, s: LigneSession) {
@@ -61,6 +64,7 @@ export class SessionsService {
       creneauLibelle: libelleDate(s.date_heure),
       format: s.format,
       lieuType: s.lieu_type ?? undefined,
+      lien: s.format === 'DISTANCE' ? (s.lieu_ou_lien ?? undefined) : undefined,
       contrepartie: s.contrepartie,
       statut: s.statut,
       proposeParMoi: s.propose_par_id === moiId,
@@ -125,6 +129,7 @@ export class SessionsService {
     );
     if (autre.statut === 'SUPPRIME')
       throw new ErreurMetier('errors.membreSupprime', HttpStatus.GONE);
+    if (v.format === 'DISTANCE') await this.parametres.exiger('sessions_distance');
     try {
       return await this.db.transaction(async (c) => {
         const k = await c.query<{ debut: Date; fin: Date; format: string }>(
@@ -190,6 +195,31 @@ export class SessionsService {
     if (!rows[0])
       throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
     return rows[0];
+  }
+
+  /** Lien de visioconférence libre (Meet, Jitsi, WhatsApp…) d'une session à distance acceptée ; vide pour le retirer. */
+  async definirLien(moiId: string, id: string, lien: string) {
+    await this.db.transaction(async (c) => {
+      const s = await this.verrouiller(c, moiId, id);
+      if (s.format !== 'DISTANCE' || s.statut !== 'ACCEPTEE')
+        throw new ErreurMetier(
+          'errors.sessionDejaTraitee',
+          HttpStatus.CONFLICT,
+        );
+      await c.query(
+        'UPDATE session_echange SET lieu_ou_lien = $2 WHERE id = $1',
+        [id, lien || null],
+      );
+      if (lien)
+        await c.query(
+          `INSERT INTO notification (utilisateur_id, type, contenu, lien) VALUES ($1, 'LIEN_SESSION', $2, $3)`,
+          [
+            s.autre_id,
+            'Le lien de ta session à distance est disponible',
+            `/sessions/${id}`,
+          ],
+        );
+    });
   }
 
   /** RG10 : seul le destinataire de la proposition y répond ; un refus libère le créneau. */

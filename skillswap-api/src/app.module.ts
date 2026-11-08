@@ -9,6 +9,7 @@ import { EchangesModule } from './echanges/echanges.module';
 import { MembreModule } from './membre/membre.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProfilsModule } from './profils/profils.module';
+import { ParametresModule } from './parametres/parametres.module';
 import { PushModule } from './push/push.module';
 import { TelephoneModule } from './telephone/telephone.module';
 
@@ -23,6 +24,7 @@ import { TelephoneModule } from './telephone/telephone.module';
         process.env.THROTTLE_DISABLED === 'true',
     }),
     DbModule,
+    ParametresModule,
     AuthModule,
     TelephoneModule,
     MembreModule,

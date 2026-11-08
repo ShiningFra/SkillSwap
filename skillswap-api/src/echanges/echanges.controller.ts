@@ -5,6 +5,7 @@ import {
   HttpCode,
   Param,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -16,6 +17,7 @@ import {
   messageSchema,
   ouvertureConversationSchema,
   propositionSchema,
+  lienSessionSchema,
   reponsePropositionSchema,
   signalementSchema,
 } from '../shared/schemas';
@@ -100,6 +102,20 @@ export class EchangesController {
       u.id,
       uuidOuIntrouvable(id),
       valider(reponsePropositionSchema, corps).accepter,
+    );
+  }
+
+  @HttpCode(204)
+  @Put('sessions/:id/lien')
+  async lien(
+    @Utilisateur() u: UtilisateurCourant,
+    @Param('id') id: string,
+    @Body() corps: unknown,
+  ) {
+    await this.sessions.definirLien(
+      u.id,
+      uuidOuIntrouvable(id),
+      valider(lienSessionSchema, corps).lien,
     );
   }
 

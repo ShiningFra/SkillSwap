@@ -316,6 +316,32 @@ describe('Échanges : profils, conversations, sessions, avis, signalements', () 
       ).toBe(409);
     });
 
+    it('lien de visioconférence : https seulement, session acceptée, visible des deux', async () => {
+      const { prof, eleve, sessionId } = await scenario();
+      const put = (m: Membre, lien: string) =>
+        m.agent
+          .put(`/sessions/${sessionId}/lien`)
+          .set('Origin', ORIGINE)
+          .send({ lien });
+      expect((await put(eleve, 'https://meet.jit.si/abc')).status).toBe(409); // pas encore acceptée
+      await post(prof, `/sessions/${sessionId}/reponse`, { accepter: true });
+      expect((await put(eleve, 'http://exemple.cm/x')).status).toBe(400);
+      expect((await put(eleve, 'javascript:alert(1)')).status).toBe(400);
+      expect((await put(eleve, 'https://meet.jit.si/abc')).status).toBe(204);
+      expect((await get(prof, `/sessions/${sessionId}`)).body.lien).toBe(
+        'https://meet.jit.si/abc',
+      );
+      const notifs = await pool.query(
+        `SELECT 1 FROM notification WHERE utilisateur_id = $1 AND type = 'LIEN_SESSION'`,
+        [prof.id],
+      );
+      expect(notifs.rowCount).toBe(1);
+      expect((await put(eleve, '')).status).toBe(204);
+      expect(
+        (await get(prof, `/sessions/${sessionId}`)).body.lien,
+      ).toBeUndefined();
+    });
+
     it('parcours complet : accepter, confirmer des deux côtés, avis unique', async () => {
       const { prof, eleve, sessionId } = await scenario();
       expect(

@@ -1,4 +1,11 @@
-import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { valider } from '../common/erreurs';
@@ -9,11 +16,17 @@ import { PushService } from './push.service';
 const abonnementSchema = z.object({
   endpoint: z.string().max(600, { error: 'errors.invalide' }),
   keys: z.object({
-    p256dh: z.string().regex(/^[A-Za-z0-9_-]{20,120}$/, { error: 'errors.invalide' }),
-    auth: z.string().regex(/^[A-Za-z0-9_-]{10,60}$/, { error: 'errors.invalide' }),
+    p256dh: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{20,120}$/, { error: 'errors.invalide' }),
+    auth: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{10,60}$/, { error: 'errors.invalide' }),
   }),
 });
-const retraitSchema = z.object({ endpoint: z.string().max(600, { error: 'errors.invalide' }) });
+const retraitSchema = z.object({
+  endpoint: z.string().max(600, { error: 'errors.invalide' }),
+});
 
 /** Notifications sur l'appareil (Web Push). Chaque membre ne gère que ses propres appareils (ES6). */
 @UseGuards(SessionGuard)
@@ -31,7 +44,11 @@ export class PushController {
   @Post('moi/push')
   async abonner(@Utilisateur() u: UtilisateurCourant, @Body() corps: unknown) {
     const v = valider(abonnementSchema, corps);
-    await this.service.abonner(u.id, { endpoint: v.endpoint, p256dh: v.keys.p256dh, auth: v.keys.auth });
+    await this.service.abonner(u.id, {
+      endpoint: v.endpoint,
+      p256dh: v.keys.p256dh,
+      auth: v.keys.auth,
+    });
   }
 
   @HttpCode(204)

@@ -40,7 +40,10 @@ export class SessionGuard implements CanActivate {
       throw new ErreurMetier('errors.nonConnecte', HttpStatus.UNAUTHORIZED);
     // Compte créé par un administrateur : tant que le mot de passe provisoire n'est pas changé, seules
     // la lecture du profil et le changement de mot de passe sont permis.
-    if (rows[0].mdpProvisoire && !ROUTES_MDP_PROVISOIRE.has(`${req.method} ${req.path}`))
+    if (
+      rows[0].mdpProvisoire &&
+      !ROUTES_MDP_PROVISOIRE.has(`${req.method} ${req.path}`)
+    )
       throw new ErreurMetier('errors.mdpProvisoire', HttpStatus.FORBIDDEN);
     req.utilisateur = { id: rows[0].id, role: rows[0].role };
     return true;

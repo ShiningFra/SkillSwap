@@ -1,6 +1,8 @@
 import { randomInt } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
+import { CLES_PARAMETRES, ParametresService } from '../parametres/parametres.service';
+import type { ClePametre } from '../parametres/parametres.service';
 import { Audit } from '../common/audit.service';
 import { ErreurMetier } from '../common/erreurs';
 import { Db } from '../db/db.service';
@@ -15,6 +17,7 @@ export class AdminService {
   constructor(
     private readonly db: Db,
     private readonly audit: Audit,
+    private readonly parametres: ParametresService,
   ) {}
 
   /** Indicateurs des 30 derniers jours (CDC : taux de concrétisation, activité, compétences confirmées). */
@@ -167,7 +170,10 @@ export class AdminService {
 
   /** Mot de passe provisoire : 16 caractères tirés d'un CSPRNG, sans caractères ambigus. */
   private genererMdp() {
-    return Array.from({ length: 16 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
+    return Array.from(
+      { length: 16 },
+      () => ALPHABET[randomInt(ALPHABET.length)],
+    ).join('');
   }
 
   /** Les actions sensibles redemandent le mot de passe de l'administrateur qui agit. */
@@ -176,8 +182,33 @@ export class AdminService {
       'SELECT mot_de_passe_hash AS h FROM utilisateur WHERE id = $1',
       [acteurId],
     );
-    const ok = rows[0] ? await verify(rows[0].h, mdp).catch(() => false) : false;
-    if (!ok) throw new ErreurMetier('errors.identifiants', HttpStatus.UNAUTHORIZED);
+    const ok = rows[0]
+      ? await verify(rows[0].h, mdp).catch(() => false)
+      : false;
+    if (!ok)
+      throw new ErreurMetier('errors.identifiants', HttpStatus.UNAUTHORIZED);
+  }
+
+  async listerParametres() {
+    return this.parametres.tous();
+  }
+
+  /** Active ou désactive une fonctionnalité ; demande le mot de passe et inscrit l'action au journal d'audit. */
+  async modifierParametre(
+    acteurId: string,
+    mdp: string,
+    cle: string,
+    actif: boolean,
+    message: string | null,
+  ) {
+    if (!(CLES_PARAMETRES as readonly string[]).includes(cle))
+      throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+    await this.confirmer(acteurId, mdp);
+    await this.parametres.modifier(acteurId, cle as ClePametre, actif, message);
+    await this.audit.enregistrer(acteurId, 'PARAMETRE_MODIFIE', undefined, {
+      cle,
+      actif,
+    });
   }
 
   async administrateurs() {
@@ -191,17 +222,24 @@ export class AdminService {
   /** Promeut un membre existant (RG : compte actif uniquement). */
   async nommer(acteurId: string, mdp: string, email: string) {
     await this.confirmer(acteurId, mdp);
-    const { rows } = await this.db.query<{ id: string; role: string; statut: string }>(
+    const { rows } = await this.db.query<{
+      id: string;
+      role: string;
+      statut: string;
+    }>(
       'SELECT id, role, statut FROM utilisateur WHERE lower(email) = lower($1)',
       [email.trim()],
     );
     const cible = rows[0];
-    if (!cible) throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
+    if (!cible)
+      throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
     if (cible.statut !== 'ACTIF')
       throw new ErreurMetier('errors.compteInactif', HttpStatus.CONFLICT);
     if (cible.role === 'ADMIN')
       throw new ErreurMetier('errors.dejaAdmin', HttpStatus.CONFLICT);
-    await this.db.query("UPDATE utilisateur SET role = 'ADMIN' WHERE id = $1", [cible.id]);
+    await this.db.query("UPDATE utilisateur SET role = 'ADMIN' WHERE id = $1", [
+      cible.id,
+    ]);
     await this.audit.enregistrer(acteurId, 'ADMIN_NOMME', cible.id);
   }
 
@@ -238,7 +276,9 @@ export class AdminService {
         throw new ErreurMetier('errors.introuvable', HttpStatus.NOT_FOUND);
       if (rows.length <= 1)
         throw new ErreurMetier('errors.dernierAdmin', HttpStatus.CONFLICT);
-      await c.query("UPDATE utilisateur SET role = 'MEMBRE' WHERE id = $1", [cibleId]);
+      await c.query("UPDATE utilisateur SET role = 'MEMBRE' WHERE id = $1", [
+        cibleId,
+      ]);
     });
     await this.audit.enregistrer(acteurId, 'ADMIN_RETIRE', cibleId);
   }

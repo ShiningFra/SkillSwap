@@ -28,13 +28,15 @@ export default async function () {
     '009_administrateurs.sql',
     '010_notification_lien.sql',
     '011_push.sql',
+    '013_competences_catalogue.sql',
+    '014_parametres.sql',
   ])
     await c.query(readFileSync(join(__dirname, '..', 'db', f), 'utf8'));
   await c.query(
-    `INSERT INTO competence (libelle, categorie_id) SELECT 'Python', id FROM categorie ORDER BY id LIMIT 1`,
+    `INSERT INTO competence (libelle, categorie_id) SELECT 'Python', id FROM categorie ORDER BY id LIMIT 1 ON CONFLICT DO NOTHING`,
   );
   await c.query(
-    `INSERT INTO competence (libelle, categorie_id) SELECT 'Anglais', id FROM categorie ORDER BY id LIMIT 1`,
+    `INSERT INTO competence (libelle, categorie_id) SELECT 'Anglais', id FROM categorie ORDER BY id LIMIT 1 ON CONFLICT DO NOTHING`,
   );
   await c.end();
 }

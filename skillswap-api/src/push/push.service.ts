@@ -1,3 +1,4 @@
+import { ParametresService } from '../parametres/parametres.service';
 import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as webpush from 'web-push';
 import { config } from '../config';
@@ -20,6 +21,7 @@ const TEXTES: Record<string, string> = {
   SESSION_PROPOSEE: 'Tu as reçu une proposition de session',
   SESSION_ACCEPTEE: 'Ta proposition de session est acceptée',
   SESSION_REFUSEE: 'Ta proposition de session est refusée',
+  LIEN_SESSION: 'Le lien de ta session à distance est disponible',
   RAPPEL_AVIS: 'Pense à laisser ton avis',
   NOUVELLE_SUGGESTION: 'Une nouvelle personne compatible',
   AVERTISSEMENT_ABSENCE: 'Une absence a été déclarée sur une de tes sessions',
@@ -42,7 +44,10 @@ export function endpointAutorise(endpoint: string): boolean {
 @Injectable()
 export class PushService implements OnModuleInit {
   private readonly journal = new Logger('Push');
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly parametres: ParametresService,
+  ) {}
 
   actif() {
     return config().vapid !== null;
@@ -68,7 +73,11 @@ export class PushService implements OnModuleInit {
     s: { endpoint: string; p256dh: string; auth: string },
   ) {
     if (!this.actif())
-      throw new ErreurMetier('errors.pushIndisponible', HttpStatus.SERVICE_UNAVAILABLE);
+      throw new ErreurMetier(
+        'errors.pushIndisponible',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    await this.parametres.exiger('notifications_push');
     if (!endpointAutorise(s.endpoint))
       throw new ErreurMetier('errors.invalide', HttpStatus.BAD_REQUEST);
     await this.db.transaction(async (c) => {
@@ -95,11 +104,14 @@ export class PushService implements OnModuleInit {
 
   /** Appelé par le signal de la base : une notification vient d'être enregistrée. */
   async envoyerNotification(notificationId: string) {
+    if (!(await this.parametres.actif('notifications_push'))) return;
     const { rows } = await this.db.query<{
       utilisateur_id: string;
       type: string;
       lien: string | null;
-    }>('SELECT utilisateur_id, type, lien FROM notification WHERE id = $1', [notificationId]);
+    }>('SELECT utilisateur_id, type, lien FROM notification WHERE id = $1', [
+      notificationId,
+    ]);
     const n = rows[0];
     if (!n) return;
     const { rows: abonnements } = await this.db.query<{
@@ -107,9 +119,10 @@ export class PushService implements OnModuleInit {
       endpoint: string;
       cle_p256dh: string;
       cle_auth: string;
-    }>('SELECT id, endpoint, cle_p256dh, cle_auth FROM push_abonnement WHERE utilisateur_id = $1', [
-      n.utilisateur_id,
-    ]);
+    }>(
+      'SELECT id, endpoint, cle_p256dh, cle_auth FROM push_abonnement WHERE utilisateur_id = $1',
+      [n.utilisateur_id],
+    );
     const charge = JSON.stringify({
       titre: 'SkillSwap',
       corps: TEXTES[n.type] ?? 'Tu as une nouvelle notification',
@@ -120,7 +133,10 @@ export class PushService implements OnModuleInit {
       abonnements.map(async (a) => {
         try {
           await webpush.sendNotification(
-            { endpoint: a.endpoint, keys: { p256dh: a.cle_p256dh, auth: a.cle_auth } },
+            {
+              endpoint: a.endpoint,
+              keys: { p256dh: a.cle_p256dh, auth: a.cle_auth },
+            },
             charge,
             { TTL: 86_400 },
           );
@@ -128,7 +144,9 @@ export class PushService implements OnModuleInit {
           const statut = (e as { statusCode?: number }).statusCode;
           // 404 et 410 : l'appareil s'est désabonné ; on ne garde pas un abonnement mort.
           if (statut === 404 || statut === 410)
-            await this.db.query('DELETE FROM push_abonnement WHERE id = $1', [a.id]);
+            await this.db.query('DELETE FROM push_abonnement WHERE id = $1', [
+              a.id,
+            ]);
           else {
             const err = e as { code?: string; message?: string; body?: string };
             const hote = new URL(a.endpoint).hostname;

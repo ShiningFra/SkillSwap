@@ -60,7 +60,9 @@ export class SuppressionService {
         [id],
       );
       await c.query(`DELETE FROM notification WHERE utilisateur_id = $1`, [id]);
-      await c.query(`DELETE FROM push_abonnement WHERE utilisateur_id = $1`, [id]);
+      await c.query(`DELETE FROM push_abonnement WHERE utilisateur_id = $1`, [
+        id,
+      ]);
       await c.query(
         `UPDATE session_connexion SET revoque_le = now() WHERE utilisateur_id = $1 AND revoque_le IS NULL`,
         [id],

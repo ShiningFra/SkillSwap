@@ -1,3 +1,4 @@
+import { ParametresService } from '../parametres/parametres.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
 import { randomBytes } from 'node:crypto';
@@ -28,6 +29,7 @@ export class AuthService {
   constructor(
     private readonly db: Db,
     private readonly audit: Audit,
+    private readonly parametres: ParametresService,
   ) {}
 
   /** Hache un faux mot de passe pour que « e-mail inconnu » coûte le même temps que « mauvais mot de passe » (ES3). */
@@ -36,6 +38,7 @@ export class AuthService {
   }
 
   async inscrire(v: { email: string; pseudo: string; motDePasse: string }) {
+    await this.parametres.exiger('inscriptions');
     const motDePasseHash = await hash(v.motDePasse, PARAMS);
     try {
       const id = await this.db.transaction(async (c) => {

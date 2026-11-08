@@ -1,3 +1,4 @@
+import { ParametresService } from '../parametres/parametres.service';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { Audit } from '../common/audit.service';
@@ -15,6 +16,7 @@ export class MembreService {
   constructor(
     private readonly db: Db,
     private readonly audit: Audit,
+    private readonly parametres: ParametresService,
   ) {}
 
   /**
@@ -51,10 +53,69 @@ export class MembreService {
 
   async catalogue() {
     const { rows } = await this.db.query(
-      `SELECT c.id, c.libelle, c.categorie_id AS "categorieId", k.libelle AS categorie
+      `SELECT c.id, c.libelle, c.synonymes, c.categorie_id AS "categorieId", k.libelle AS categorie
          FROM competence c JOIN categorie k ON k.id = c.categorie_id ORDER BY c.libelle`,
     );
     return rows;
+  }
+
+  /**
+   * Un membre propose une compétence absente du catalogue. Anti-doublon : on compare sans accents,
+   * sans casse ni ponctuation, au libellé comme aux synonymes ; en cas de proximité on renvoie l'existante.
+   */
+  async proposerCompetence(
+    id: string,
+    v: { libelle: string; categorieId: string },
+  ) {
+    await this.parametres.exiger('propositions_competences');
+    const cle = (t: string) =>
+      t
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    const voulu = cle(v.libelle);
+    if (voulu.length < 2)
+      throw new ErreurMetier('errors.competence', HttpStatus.BAD_REQUEST);
+    const { rows: cat } = await this.db.query(
+      'SELECT 1 FROM categorie WHERE id = $1',
+      [v.categorieId],
+    );
+    if (!cat.length)
+      throw new ErreurMetier('errors.competence', HttpStatus.BAD_REQUEST);
+    const { rows: recentes } = await this.db.query(
+      `SELECT count(*)::int AS n FROM competence WHERE cree_par = $1 AND cree_le > now() - interval '1 day'`,
+      [id],
+    );
+    if (recentes[0].n >= 5)
+      throw new ErreurMetier(
+        'errors.tropDePropositions',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    const { rows } = await this.db.query(
+      `SELECT c.id, c.libelle, c.synonymes, c.categorie_id AS "categorieId", k.libelle AS categorie
+         FROM competence c JOIN categorie k ON k.id = c.categorie_id`,
+    );
+    const existante = rows.find(
+      (r: { libelle: string; synonymes: string }) =>
+        cle(r.libelle) === voulu ||
+        r.synonymes.split(';').some((x: string) => cle(x) === voulu),
+    );
+    if (existante) return { ...existante, existait: true };
+    const { rows: neuve } = await this.db.query(
+      `INSERT INTO competence (libelle, categorie_id, cree_par) VALUES ($1, $2, $3) RETURNING id`,
+      [v.libelle, v.categorieId, id],
+    );
+    await this.audit.enregistrer(id, 'COMPETENCE_PROPOSEE', neuve[0].id, {
+      libelle: v.libelle,
+    });
+    const { rows: c } = await this.db.query(
+      `SELECT c.id, c.libelle, c.synonymes, c.categorie_id AS "categorieId", k.libelle AS categorie
+         FROM competence c JOIN categorie k ON k.id = c.categorie_id WHERE c.id = $1`,
+      [neuve[0].id],
+    );
+    return { ...c[0], existait: false };
   }
 
   async declarations(id: string) {
