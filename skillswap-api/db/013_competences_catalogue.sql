@@ -1,9 +1,38 @@
+-- Les accents de ce fichier sont en UTF-8 : on l'impose, quel que soit l'encodage par défaut du client (Windows : WIN1252).
+SET client_encoding = 'UTF8';
+
 -- 013 : catalogue de compétences, synonymes et compétences proposées par les membres.
 -- Les synonymes servent à la recherche (« maths » trouve « Mathématiques ») ; ils sont séparés par des points-virgules.
 ALTER TABLE competence ADD COLUMN IF NOT EXISTS synonymes text NOT NULL DEFAULT '';
 ALTER TABLE competence ADD COLUMN IF NOT EXISTS cree_par uuid REFERENCES utilisateur(id) ON DELETE SET NULL;
 ALTER TABLE competence ADD COLUMN IF NOT EXISTS cree_le timestamptz NOT NULL DEFAULT now();
 CREATE INDEX IF NOT EXISTS ix_competence_cree_par ON competence (cree_par, cree_le) WHERE cree_par IS NOT NULL;
+
+-- Réparation : si une version précédente de ce fichier a été appliquée avec un client en WIN1252, les accents ont été
+-- enregistrés abîmés (« PrÃ©paration »). On les remet en état, puis on retire les restes non utilisés.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT id, libelle, synonymes FROM competence WHERE libelle ~ '[ÃÂ]' OR synonymes ~ '[ÃÂ]' LOOP
+    BEGIN
+      UPDATE competence
+         SET libelle = convert_from(convert_to(r.libelle, 'WIN1252'), 'UTF8'),
+             synonymes = convert_from(convert_to(r.synonymes, 'WIN1252'), 'UTF8')
+       WHERE id = r.id;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END LOOP;
+  FOR r IN SELECT id, libelle FROM categorie WHERE libelle ~ '[ÃÂ]' LOOP
+    BEGIN
+      UPDATE categorie SET libelle = convert_from(convert_to(r.libelle, 'WIN1252'), 'UTF8') WHERE id = r.id;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END LOOP;
+END $$;
+DELETE FROM competence c
+ WHERE c.cree_par IS NULL AND c.libelle ~ '[ÃÂ]'
+   AND NOT EXISTS (SELECT 1 FROM declaration_competence d WHERE d.competence_id = c.id)
+   AND NOT EXISTS (SELECT 1 FROM session_echange s WHERE s.competence_id = c.id);
 
 INSERT INTO competence (libelle, synonymes, categorie_id)
 SELECT v.libelle, v.synonymes, k.id

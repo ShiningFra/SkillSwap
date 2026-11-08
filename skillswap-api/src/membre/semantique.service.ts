@@ -1,5 +1,5 @@
 import { ParametresService } from '../parametres/parametres.service';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Db } from '../db/db.service';
@@ -59,11 +59,17 @@ type Extracteur = (
  * sinon il est téléchargé une fois depuis Hugging Face. EMBEDDINGS_DISABLED=true coupe la fonction.
  */
 @Injectable()
-export class SemantiqueService {
+export class SemantiqueService implements OnApplicationBootstrap {
   private readonly journal = new Logger(SemantiqueService.name);
   private extracteur?: Promise<Extracteur | null>;
   private vecteurs?: Promise<Candidat[]>;
   private vecteursCle = '';
+
+  /** Charge le modèle et vectorise le catalogue au démarrage : la première recherche n'attend plus. */
+  onApplicationBootstrap() {
+    if (!this.actif() || process.env.NODE_ENV === 'test') return;
+    void this.catalogue().catch(() => undefined);
+  }
 
   constructor(
     private readonly db: Db,

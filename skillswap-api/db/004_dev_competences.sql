@@ -1,3 +1,4 @@
+SET client_encoding = 'UTF8';
 -- Compétences d'exemple pour le développement (à ne pas appliquer en production).
 INSERT INTO competence (libelle, categorie_id)
 SELECT v.libelle, c.id

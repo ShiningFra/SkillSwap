@@ -1,7 +1,10 @@
 import { randomInt } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { hash, verify } from '@node-rs/argon2';
-import { CLES_PARAMETRES, ParametresService } from '../parametres/parametres.service';
+import {
+  CLES_PARAMETRES,
+  ParametresService,
+} from '../parametres/parametres.service';
 import type { ClePametre } from '../parametres/parametres.service';
 import { Audit } from '../common/audit.service';
 import { ErreurMetier } from '../common/erreurs';

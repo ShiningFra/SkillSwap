@@ -143,7 +143,25 @@ export const modificationCompetenceSchema = z.object({
 // ---------------------------------------------------------------------------
 export const rechercheSchema = z.object({
   competenceId: z.uuid({ error: 'errors.competence' }).optional(),
+  /** Plusieurs compétences à la fois, séparées par des virgules (celles qui ressemblent au texte tapé). */
+  competenceIds: z
+    .string()
+    .transform((v) => v.split(',').filter(Boolean))
+    .pipe(
+      z
+        .array(z.uuid({ error: 'errors.competence' }))
+        .min(1)
+        .max(10),
+    )
+    .optional(),
   format: z.enum(['PRESENTIEL', 'DISTANCE']).optional(),
+  limite: z.coerce.number().int().min(1).max(50).default(20),
+  decalage: z.coerce.number().int().min(0).max(5000).default(0),
+});
+
+export const paginationSchema = z.object({
+  limite: z.coerce.number().int().min(1).max(50).default(10),
+  decalage: z.coerce.number().int().min(0).max(5000).default(0),
 });
 
 /** RG6 : un créneau se termine après son début ; il se publie dans le futur. */

@@ -1,3 +1,4 @@
+SET client_encoding = 'UTF8';
 -- 014 : paramètres et interrupteurs de fonctionnalités, pilotés depuis l'administration.
 -- Une fonctionnalité désactivée est annoncée aux membres comme « en révision » (message modifiable).
 CREATE TABLE IF NOT EXISTS parametre (

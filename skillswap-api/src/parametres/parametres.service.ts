@@ -36,9 +36,7 @@ export class ParametresService {
       actif: boolean;
       message: string | null;
       modifieLe: Date;
-    }>(
-      `SELECT cle, actif, message, modifie_le AS "modifieLe" FROM parametre`,
-    );
+    }>(`SELECT cle, actif, message, modifie_le AS "modifieLe" FROM parametre`);
     const parCle = new Map(rows.map((r) => [r.cle, r]));
     const valeurs = CLES_PARAMETRES.map((cle) => {
       const r = parCle.get(cle);
@@ -60,7 +58,10 @@ export class ParametresService {
   /** Refuse l'opération (503) quand la fonctionnalité est « en révision ». */
   async exiger(cle: ClePametre): Promise<void> {
     if (!(await this.actif(cle)))
-      throw new ErreurMetier('errors.enRevision', HttpStatus.SERVICE_UNAVAILABLE);
+      throw new ErreurMetier(
+        'errors.enRevision',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
   }
 
   async modifier(

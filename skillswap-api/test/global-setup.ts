@@ -30,6 +30,7 @@ export default async function () {
     '011_push.sql',
     '013_competences_catalogue.sql',
     '014_parametres.sql',
+    '015_notification_signalement.sql',
   ])
     await c.query(readFileSync(join(__dirname, '..', 'db', f), 'utf8'));
   await c.query(

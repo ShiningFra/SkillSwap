@@ -1,3 +1,4 @@
+SET client_encoding = 'UTF8';
 -- Données d'amorçage : catégories du référentiel (issues de l'enquête, Q21 et Q24)
 INSERT INTO categorie (libelle) VALUES
  ('Soutien scolaire'),

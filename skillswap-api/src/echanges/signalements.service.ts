@@ -38,5 +38,13 @@ export class SignalementsService {
       'INSERT INTO signalement (auteur_id, cible_id, motif, description) VALUES ($1, $2, $3, $4)',
       [moiId, v.membreId, v.motif, v.description || null],
     );
+    // Les administrateurs actifs (hors auteur et cible) sont prévenus ; la notification déclenche aussi la notification push.
+    await this.db.query(
+      `INSERT INTO notification (utilisateur_id, type, contenu, lien)
+       SELECT a.id, 'NOUVEAU_SIGNALEMENT', 'Nouveau signalement à traiter', $3
+         FROM utilisateur a
+        WHERE a.role = 'ADMIN' AND a.statut = 'ACTIF' AND a.id NOT IN ($1, $2)`,
+      [moiId, v.membreId, '/admin'],
+    );
   }
 }

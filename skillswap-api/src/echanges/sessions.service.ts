@@ -129,7 +129,8 @@ export class SessionsService {
     );
     if (autre.statut === 'SUPPRIME')
       throw new ErreurMetier('errors.membreSupprime', HttpStatus.GONE);
-    if (v.format === 'DISTANCE') await this.parametres.exiger('sessions_distance');
+    if (v.format === 'DISTANCE')
+      await this.parametres.exiger('sessions_distance');
     try {
       return await this.db.transaction(async (c) => {
         const k = await c.query<{ debut: Date; fin: Date; format: string }>(

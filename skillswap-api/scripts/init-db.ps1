@@ -34,7 +34,7 @@ if ($version -ge 150000) {
   Sql "postgres" @("-c", "CREATE DATABASE $Base ENCODING 'UTF8' TEMPLATE template0;")
 }
 
-$scripts = @("001_schema.sql", "002_seed.sql", "003_securite.sql", "005_moderation.sql", "006_moderation_charge.sql", "007_suppression_compte.sql", "008_reinitialisation_mdp.sql", "009_administrateurs.sql", "010_notification_lien.sql", "011_push.sql", "012_notification_lien_anciennes.sql", "013_competences_catalogue.sql", "014_parametres.sql")
+$scripts = @("001_schema.sql", "002_seed.sql", "003_securite.sql", "005_moderation.sql", "006_moderation_charge.sql", "007_suppression_compte.sql", "008_reinitialisation_mdp.sql", "009_administrateurs.sql", "010_notification_lien.sql", "011_push.sql", "012_notification_lien_anciennes.sql", "013_competences_catalogue.sql", "014_parametres.sql", "015_notification_signalement.sql")
 if ($Exemples) { $scripts += "004_dev_competences.sql" }
 foreach ($s in $scripts) {
   Write-Host "Application de $s"

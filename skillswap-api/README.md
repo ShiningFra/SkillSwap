@@ -6,7 +6,7 @@ Premier lot du backend : socle de sécurité (CDC 7.6, ES1 à ES13), comptes, t�
 
 ```bash
 createdb skillswap
-psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql -f db/010_notification_lien.sql -f db/011_push.sql -f db/012_notification_lien_anciennes.sql -f db/013_competences_catalogue.sql -f db/014_parametres.sql
+psql skillswap -f db/001_schema.sql -f db/002_seed.sql -f db/003_securite.sql -f db/005_moderation.sql -f db/006_moderation_charge.sql -f db/007_suppression_compte.sql -f db/008_reinitialisation_mdp.sql -f db/009_administrateurs.sql -f db/010_notification_lien.sql -f db/011_push.sql -f db/012_notification_lien_anciennes.sql -f db/013_competences_catalogue.sql -f db/014_parametres.sql -f db/015_notification_signalement.sql
 cp .env.example .env            # puis adapter
 npm run start:dev                # http://localhost:3001
 ```
@@ -126,3 +126,7 @@ depuis Hugging Face puis gardé en cache ; compter ~300 Mo de mémoire et ~1 s p
 - **Modèle local, sans réglage :** décompresser `modele-multilingual-e5-small.zip` à la racine du projet API pour obtenir `models/Xenova/multilingual-e5-small/` (avec `config.json`, `tokenizer.json`, `tokenizer_config.json`, `onnx/model_quantized.onnx`). L'API le détecte toute seule, en développement comme en production : au déploiement, il suffit de copier ce dossier avec le code. Le dossier `models/` n'est pas versionné (`.gitignore`).
 - `EMBEDDINGS_DIR=/chemin/models` reste possible pour placer le dossier ailleurs ; sans dossier local, le modèle est téléchargé depuis Hugging Face au premier usage.
 - Si `npm install` échoue sur `onnxruntime-node` (réseau filtré), utiliser `npm install --ignore-scripts`.
+
+## Appliquer les migrations (Windows)
+Toujours avec l'encodage UTF-8 (les fichiers contiennent des accents) : les fichiers 002, 004, 013 et 014 l'imposent eux-mêmes (`SET client_encoding = 'UTF8'`).
+`psql <base> -f db/verifier_base.sql` liste les migrations manquantes de ta base et signale d'éventuels accents abîmés.

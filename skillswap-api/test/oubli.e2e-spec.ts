@@ -184,7 +184,7 @@ describe('Mot de passe oublié', () => {
     } finally {
       delete process.env.SMTP_URL;
       delete process.env.MAIL_EXPEDITEUR;
-      await new Promise((r) => serveur.close(r));
+      await new Promise<void>((r) => serveur.close(() => r()));
     }
   });
 });

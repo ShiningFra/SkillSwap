@@ -95,12 +95,18 @@ describe('Recherche complète, choix de compétence, suppression de compte', () 
     await offrir(prof, troisieme);
     await chercher(prof, competences[0]);
     await offrir(eleve, competences[0]);
-    const res = await eleve.agent.get('/profils');
-    const ligne = res.body.find((l: { id: string }) => l.id === prof.id);
+    const res = await eleve.agent.get(
+      `/profils?competenceIds=${competences[1]},${troisieme}`,
+    );
+    const ligne = res.body.resultats.find(
+      (l: { id: string }) => l.id === prof.id,
+    );
     expect(ligne.offres).toHaveLength(2);
     expect(ligne.reciproques).toEqual([competences[0]]);
     const filtre = await eleve.agent.get(`/profils?competenceId=${troisieme}`);
-    const l2 = filtre.body.find((l: { id: string }) => l.id === prof.id);
+    const l2 = filtre.body.resultats.find(
+      (l: { id: string }) => l.id === prof.id,
+    );
     expect(l2.offres).toHaveLength(1);
     expect(l2.reciproques).toEqual([competences[0]]);
   });
@@ -182,9 +188,9 @@ describe('Recherche complète, choix de compétence, suppression de compte', () 
     expect(sess.rows[0].statut).toBe('ANNULEE');
 
     expect((await eleve.agent.get(`/profils/${prof.id}`)).status).toBe(404);
-    const liste = await eleve.agent.get('/profils');
+    const liste = await eleve.agent.get('/profils?limite=50');
     expect(
-      liste.body.find((l: { id: string }) => l.id === prof.id),
+      liste.body.resultats.find((l: { id: string }) => l.id === prof.id),
     ).toBeUndefined();
     expect(
       (

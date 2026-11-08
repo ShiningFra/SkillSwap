@@ -13,7 +13,11 @@ import { Throttle } from '@nestjs/throttler';
 import { uuidOuIntrouvable, valider } from '../common/erreurs';
 import { SessionGuard, Utilisateur } from '../common/session.guard';
 import type { UtilisateurCourant } from '../common/session.guard';
-import { creneauSchema, rechercheSchema } from '../shared/schemas';
+import {
+  creneauSchema,
+  paginationSchema,
+  rechercheSchema,
+} from '../shared/schemas';
 import { ProfilsService } from './profils.service';
 
 @UseGuards(SessionGuard)
@@ -21,8 +25,14 @@ import { ProfilsService } from './profils.service';
 export class ProfilsController {
   constructor(private readonly profils: ProfilsService) {}
 
-  // ES8 et ES13 : 20 recherches par minute au plus, pour empêcher de retrouver une position par recoupements.
-  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Get('suggestions')
+  suggestions(@Utilisateur() u: UtilisateurCourant, @Query() q: unknown) {
+    return this.profils.suggerer(u.id, valider(paginationSchema, q));
+  }
+
+  // ES8 et ES13 : 30 recherches par minute au plus, pour empêcher de retrouver une position par recoupements.
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Get('profils')
   rechercher(@Utilisateur() u: UtilisateurCourant, @Query() q: unknown) {
     return this.profils.rechercher(u.id, valider(rechercheSchema, q));

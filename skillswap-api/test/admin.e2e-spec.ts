@@ -94,6 +94,30 @@ describe('Administration : indicateurs et modération', () => {
     );
   });
 
+  it('un nouveau signalement prévient chaque administrateur (hors auteur et cible)', async () => {
+    const a = await membre('ADMIN');
+    const autre = await membre('ADMIN');
+    const cible = await membre();
+    const auteur = await membre();
+    const r = await auteur.agent
+      .post('/signalements')
+      .set('Origin', ORIGINE)
+      .send({ membreId: cible.id, motif: 'SPAM', description: 'Publicité' });
+    expect(r.status).toBe(201);
+    for (const adm of [a, autre]) {
+      const n = (await adm.agent.get('/notifications')).body.notifications as {
+        type: string;
+        lien: string;
+      }[];
+      const notif = n.find((x) => x.type === 'NOUVEAU_SIGNALEMENT');
+      expect(notif?.lien).toBe('/admin');
+    }
+    const cn = (await cible.agent.get('/notifications')).body.notifications as {
+      type: string;
+    }[];
+    expect(cn.some((x) => x.type === 'NOUVEAU_SIGNALEMENT')).toBe(false);
+  });
+
   it('liste, détaille et avertit sans exposer de données privées', async () => {
     const a = await membre('ADMIN');
     const cible = await membre();

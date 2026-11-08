@@ -21,6 +21,7 @@ const TEXTES: Record<string, string> = {
   SESSION_PROPOSEE: 'Tu as reçu une proposition de session',
   SESSION_ACCEPTEE: 'Ta proposition de session est acceptée',
   SESSION_REFUSEE: 'Ta proposition de session est refusée',
+  NOUVEAU_SIGNALEMENT: 'Nouveau signalement à traiter',
   LIEN_SESSION: 'Le lien de ta session à distance est disponible',
   RAPPEL_AVIS: 'Pense à laisser ton avis',
   NOUVELLE_SUGGESTION: 'Une nouvelle personne compatible',
