@@ -223,6 +223,25 @@ describe('Portefeuille : recharge, séquestre, libération, remboursement, arbit
       expect((await solde(m)).disponible).toBe(2500);
     });
 
+    it("ne laisse passer qu'un seul retrait quand deux partent en même temps", async () => {
+      const m = await membre();
+      await recharger(m, 4000);
+      const corps = {
+        montant: 3000,
+        operateur: 'MTN',
+        numero: '677123456',
+        motDePasse: MDP,
+      };
+      const reponses = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          post(m, '/portefeuille/retraits', corps),
+        ),
+      );
+      expect(reponses.filter((r) => r.status === 204)).toHaveLength(1);
+      expect(reponses.filter((r) => r.status === 409)).toHaveLength(4);
+      expect((await solde(m)).disponible).toBe(1000);
+    });
+
     it('est refusé quand le portefeuille est en révision', async () => {
       const admin = await membre(true);
       const m = await membre();
