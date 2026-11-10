@@ -14,5 +14,5 @@ SELECT migration, CASE WHEN ok THEN 'ok' ELSE 'MANQUANTE -> appliquer ce fichier
   ('015_notification_signalement.sql', EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_notification_type' AND pg_get_constraintdef(oid) LIKE '%NOUVEAU_SIGNALEMENT%')),
   ('016_portefeuille.sql', EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ecriture_portefeuille'))
 ) AS t(migration, ok);
-SELECT 'accents abîmés dans le catalogue : ' || count(*) || CASE WHEN count(*) > 0 THEN ' -> relancer 013_competences_catalogue.sql' ELSE ' (aucun)' END AS encodage
-  FROM competence WHERE libelle ~ '[ÃÂ]';
+SELECT 'accents abîmés dans le catalogue : ' || count(*) || CASE WHEN count(*) > 0 THEN ' -> relancer 017_reparation_accents.sql' ELSE ' (aucun)' END AS encodage
+  FROM competence WHERE libelle ~ '(Ã|Â|â€)';

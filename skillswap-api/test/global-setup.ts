@@ -32,6 +32,7 @@ export default async function () {
     '014_parametres.sql',
     '015_notification_signalement.sql',
     '016_portefeuille.sql',
+    '017_reparation_accents.sql',
   ])
     await c.query(readFileSync(join(__dirname, '..', 'db', f), 'utf8'));
   await c.query(
